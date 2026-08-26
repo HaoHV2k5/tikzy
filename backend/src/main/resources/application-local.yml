@@ -1,0 +1,16 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+# Dev local: cho phép ddl-auto update nếu không chạy Flyway
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.deprecation: off

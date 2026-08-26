@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: tikzy-backend
+
+  datasource:
+    # Supabase qua PgBouncer Connection Pooler (port 6543)
+    # prepareThreshold=0: bắt buộc vì PgBouncer transaction mode không hỗ trợ prepared statements
+    url: jdbc:postgresql://${SUPABASE_HOST:aws-0-ap-southeast-1.pooler.supabase.com}:${SUPABASE_PORT:6543}/${SUPABASE_DB:postgres}?prepareThreshold=0
+    username: ${SUPABASE_USER:postgres.your-project-ref}
+    password: ${SUPABASE_PASSWORD:your-password}
+    hikari:
+      maximum-pool-size: 15          # theo risk matrix: tránh cạn kiệt connection Supabase
+      minimum-idle: 3
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate             # schema do Flyway quản lý, JPA chỉ validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: Asia/Ho_Chi_Minh
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: public
+    default-schema: public
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 5000
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# ===== JWT (Access Token 30p + Refresh Token 7-30 ngày) =====
+jwt:
+  secret: ${JWT_SECRET:change-me-to-a-very-long-secret-key-at-least-64-characters-for-hs512}
+  access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION:1800000}        # 30 phút
+  refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION:2592000000}   # 30 ngày
+
+# ===== Cloudinary =====
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+
+# ===== Ticket =====
+ticket:
+  reservation-ttl-minutes: 15        # giữ chỗ 15 phút (Redis lock + orders.expires_at)
+  qr-secret: ${QR_SECRET:change-me-qr-hmac-secret}  # HMAC-SHA256 ký số QR payload
+
+# ===== Logging =====
+logging:
+  level:
+    root: info
+    com.tikzy: debug
