@@ -3,6 +3,7 @@ package com.tikzy.order.entity;
 import com.tikzy.auth.entity.User;
 import com.tikzy.common.entity.BaseEntity;
 import com.tikzy.event.entity.Event;
+import com.tikzy.event.entity.ShowTime;
 import com.tikzy.order.enums.OrderStatus;
 import com.tikzy.promotion.entity.Promotion;
 import jakarta.persistence.CascadeType;
@@ -45,6 +46,10 @@ public class Order extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "show_time_id", nullable = false)
+    private ShowTime showTime;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "promotion_id") // nullable

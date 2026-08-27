@@ -33,11 +33,11 @@ Nền tảng bán vé sự kiện trực tuyến theo mô hình **Marketplace**,
 ## Module nghiệp vụ
 
 - **Event**: CRUD sự kiện, suất diễn, hạng vé, chính sách hoàn vé (`NO_REFUND` / `ALLOW_REFUND`), upload ảnh Cloudinary.
-- **Ticket & Inventory**: nhiều hạng vé (Early Bird, GA, VIP...), giữ chỗ 15 phút bằng Redis `SETNX`, vé độc lập với QR ký số HMAC-SHA256 (offline-safe).
-- **Promotion**: voucher theo % hoặc số tiền cố định, giới hạn lượt dùng, voucher đền bù.
-- **Payment (Strategy)**: đa cổng thanh toán + Auto-Refund đảo ngược giao dịch, chỉ hoàn `orders.total_amount`.
+- **Ticket & Inventory**: nhiều hạng vé (Early Bird, GA, VIP...), mỗi order gắn một suất diễn, inventory theo `show_time + ticket_type`, giữ chỗ 15 phút bằng Redis `SETNX`, vé độc lập với QR ký số HMAC-SHA256 được Backend verify online.
+- **Promotion**: voucher theo % hoặc số tiền cố định, giới hạn lượt dùng tổng và theo user, ví voucher, lịch sử sử dụng và voucher đền bù.
+- **Payment (Strategy)**: đa cổng thanh toán + Auto-Refund đảo ngược giao dịch, callback idempotent, chỉ hoàn `orders.total_amount`.
 - **Settlement**: chốt sổ doanh thu sau show, tính phí dịch vụ, xuất biên bản đối soát (PDF/Excel).
-- **Check-in**: quét QR (`html5-qrcode`), chống double check-in bằng DB Unique Constraint.
+- **Check-in**: quét QR (`html5-qrcode`), Backend verify online, chống double check-in bằng DB Unique Constraint.
 - **Banner**: slider trang chủ, banner danh mục, lên lịch hiển thị + ưu tiên.
 - **Auth & Session**: JWT (Access 15-30p) + Refresh Token (lưu DB), Logout thu hồi, Refresh Token Rotation.
 
@@ -49,14 +49,14 @@ Nền tảng bán vé sự kiện trực tuyến theo mô hình **Marketplace**,
 | Coupon abuse | Redis atomic `DECR` kiểm soát quota voucher |
 | Cạn kiệt DB connection | PgBouncer pooler (port 6543) + HikariCP `maximum-pool-size: 15` |
 | Batch refund nghẽn | Spring Batch / Redis Queue, chunk 30-50 đơn, nghỉ 200ms giữa request |
-| Duplicate refund | Idempotency Key (UUID) + ràng buộc trạng thái `REFUNDED` |
+| Duplicate payment/refund | Unique transaction theo provider, conditional state update, Idempotency Key cho refund và query/retry cùng key |
 | Mất callback thanh toán | Payment Reconciliation Scheduler quét đơn `PENDING` quá 15 phút |
 
 ## Cơ sở dữ liệu
 
 Toàn bộ bảng dùng **UUID** làm khóa chính (`gen_random_uuid()`) — tránh lộ thông tin kinh doanh, dễ scale đa vùng, tương thích Hibernate 6+.
 
-Các bảng chính: `roles`, `users`, `refresh_tokens`, `categories`, `events`, `show_times`, `ticket_types`, `tickets`, `promotions`, `orders`, `order_items`, `payments`, `refund_logs`, `event_broadcasts`, `settlements`, `check_ins`, `ad_packages`, `ad_campaigns`, `banners`.
+Các bảng chính: `roles`, `users`, `refresh_tokens`, `categories`, `events`, `show_times`, `ticket_types`, `show_time_ticket_inventories`, `tickets`, `promotions`, `user_promotions`, `promotion_usages`, `orders`, `order_items`, `payments`, `refund_logs`, `event_broadcasts`, `settlements`, `check_ins`, `ad_packages`, `ad_campaigns`, `banners`.
 
 ---
 

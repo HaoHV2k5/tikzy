@@ -47,7 +47,7 @@ public class Ticket extends BaseEntity {
     /**
      * Chuỗi JSON ký số HMAC-SHA256:
      * {ticketId, eventId, ticketType, seatNumber, customerName, signature}
-     * — hỗ trợ máy quét đọc offline ngay cả khi mất mạng.
+     * — scanner gửi lên Backend để verify và check-in online.
      */
     @Column(name = "qr_payload", unique = true, columnDefinition = "TEXT")
     private String qrPayload;

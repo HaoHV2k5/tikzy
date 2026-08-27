@@ -57,6 +57,9 @@ public class Promotion extends BaseEntity {
     @Column(name = "total_usage_limit")
     private Integer totalUsageLimit;
 
+    @Column(name = "max_usage_per_user")
+    private Integer maxUsagePerUser;
+
     @Builder.Default
     @Column(name = "used_count", nullable = false)
     private Integer usedCount = 0;

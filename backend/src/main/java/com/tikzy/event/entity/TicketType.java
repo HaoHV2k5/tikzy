@@ -34,13 +34,6 @@ public class TicketType extends BaseEntity {
     @Column(name = "price", nullable = false, precision = 15, scale = 2)
     private BigDecimal price;
 
-    @Column(name = "total_quantity", nullable = false)
-    private Integer totalQuantity;
-
-    @Builder.Default
-    @Column(name = "sold_quantity", nullable = false)
-    private Integer soldQuantity = 0; // denormalized counter, chống oversell bằng CHECK constraint
-
     @Builder.Default
     @Column(name = "max_per_order", nullable = false)
     private Integer maxPerOrder = 10;

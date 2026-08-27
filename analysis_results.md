@@ -49,7 +49,7 @@ graph LR
 flowchart TD
     A["Truy cập Tikzy"] --> B["Duyệt / Tìm kiếm sự kiện"]
     B --> C["Xem chi tiết sự kiện"]
-    C --> D{"Chọn suất diễn & hạng vé"}
+    C --> D{"Chọn một suất diễn & hạng vé"}
     D --> E["Chọn số lượng vé"]
     E --> F{"Có sơ đồ ghế ngồi?"}
     F -->|Có| G["Chọn vị trí ghế"]
@@ -57,16 +57,17 @@ flowchart TD
     G --> H
     H --> I["Đăng nhập / Đăng ký"]
     I --> J["Nhập thông tin người mua"]
-    J --> K{"Có mã giảm giá (Voucher)?"}
-    K -->|Có| L["Hệ thống kiểm tra điều kiện:<br/>Hạn dùng, số lượng, sự kiện áp dụng<br/>Trừ discount_amount"]
-    K -->|Không| M["Giữ nguyên giá gốc"]
-    L --> N["Tính tổng tiền thực trả:<br/>total_amount = subtotal - discount_amount"]
-    M --> N
-    N --> O["Chọn cổng thanh toán (VNPAY / MoMo)"]
-    O --> P{"Thanh toán thành công?"}
-    P -->|Có| Q["Tikzy giữ tiền vào Escrow Pool<br/>Sinh vé điện tử (QR Code)"]
-    P -->|Không| R["Báo lỗi - Mời thử lại"]
-    Q --> S["Gửi Email xác nhận + Lưu vé vào App"]
+    J --> K["Tạo order gắn với event + show time"]
+    K --> L{"Có mã giảm giá (Voucher)?"}
+    L -->|Có| M["Hệ thống kiểm tra điều kiện:<br/>Hạn dùng, quota toàn hệ thống và quota theo user<br/>Trừ discount_amount"]
+    L -->|Không| N["Giữ nguyên giá gốc"]
+    M --> O["Tính tổng tiền thực trả:<br/>total_amount = subtotal - discount_amount"]
+    N --> O
+    O --> P["Chọn cổng thanh toán (VNPAY / MoMo)"]
+    P --> Q{"Thanh toán thành công?"}
+    Q -->|Có| R["Tikzy giữ tiền vào Escrow Pool<br/>Sinh vé điện tử (QR Code)"]
+    Q -->|Không| S["Báo lỗi - Mời thử lại"]
+    R --> T["Gửi Email xác nhận + Lưu vé vào App"]
 ```
 
 ---
@@ -132,14 +133,14 @@ sequenceDiagram
     Note over SYS, GATEWAY: Bước 2: Batch Hoàn tiền tự động qua API
     SYS->>JOB: Đẩy danh sách tất cả Orders đã PAID vào Queue
     loop Xử lý từng lô đơn hàng (Chunk 30 đơn/lần)
-        JOB->>GATEWAY: Gọi strategy.refund(originalTransactionId, actualPaidAmount)
+        JOB->>GATEWAY: Gọi strategy.refund(originalTransactionId, actualPaidAmount, idempotencyKey)
         alt API Hoàn thành công
             GATEWAY-->>JOB: Response: SUCCESS (Mã hoàn tiền Refund_ID)
-            JOB->>SYS: Update Order = REFUNDED, Payment = REFUNDED
+             JOB->>SYS: Update Order = REFUNDED, Payment = REFUNDED, Ticket = CANCELLED
             JOB->>KH: 🔔 Tiền thực trả tự động hồi về Ví/Thẻ/TK Ngân hàng gốc
         else API Lỗi / Giao dịch quá hạn 90 ngày
-            GATEWAY-->>JOB: Response: FAILED
-            JOB->>SYS: Ghi log bảng refund_logs (status = REQUIRE_MANUAL)
+            GATEWAY-->>JOB: Response: FAILED / TIMEOUT
+            JOB->>SYS: Giữ PROCESSING để query/retry cùng idempotencyKey; nếu không xác định được thì MANUAL_BANK
             JOB->>KH: 📧 Gửi link mời xác nhận STK để kế toán chuyển bù
         end
     end
@@ -187,7 +188,7 @@ sequenceDiagram
     BTC->>ORG_UI: Bấm [XÁC NHẬN PHÁT VOUCHER & GỬI EMAIL]
 
     ORG_UI->>SYS: POST /api/v1/organizer/events/{id}/broadcast
-    SYS->>SYS: 1. Tạo Promotion Record mới gắn với BTC<br/>2. Lọc danh sách User ID có order dùng voucher<br/>3. Tự động lưu voucher mới vào [Ví Ưu Đãi] của từng User
+    SYS->>SYS: 1. Tạo Promotion Record mới gắn với BTC<br/>2. Lọc danh sách User ID có order dùng voucher<br/>3. Tạo UserPromotion cho từng user, chống cấp trùng bằng unique key
     SYS->>MAIL: Khởi chạy Async Job gửi Email hàng loạt
     
     MAIL-->>KH: 📧 Gửi Email chuẩn nhận diện [Tikzy x Tên BTC]:<br/>"Thư xin lỗi & Mã Voucher ưu đãi đền bù riêng cho bạn"
@@ -208,22 +209,27 @@ sequenceDiagram
 
 ### 4.2. Module Vé & Giữ Chỗ (Ticket & Inventory Module)
 * Phân chia nhiều hạng vé: Early Bird, GA, VIP, VVIP...
-* Giữ chỗ tạm thời trong **15 phút** bằng **Redis Distributed Lock** (`SETNX`). Trong thời gian 15 phút này, khách hàng có thể thử thanh toán lại nhiều lần hoặc đổi cổng thanh toán (`orders 1 - N payments`) nếu gặp sự cố thanh toán.
-* Tự động hoàn trả vé về kho nếu hết 15 phút chưa thanh toán qua `OrderExpirationScheduler`.
+* Mỗi order gắn với đúng một `event` và một `show_time`. Tồn kho được quản lý theo cặp `show_time_id + ticket_type_id` trong bảng `show_time_ticket_inventories`.
+* Giữ chỗ tạm thời trong **15 phút** bằng **Redis Distributed Lock** (`SETNX`) theo từng show time và loại vé. Trong thời gian 15 phút này, khách hàng có thể thử thanh toán lại nhiều lần hoặc đổi cổng thanh toán (`orders 1 - N payments`) nếu gặp sự cố thanh toán.
+* `reserved_quantity` được tăng khi tạo order; chỉ khi thanh toán thành công mới chuyển sang `sold_quantity`. Hết hạn thanh toán thì giải phóng `reserved_quantity` qua `OrderExpirationScheduler`.
 * **Phát hành vé độc lập & Mã QR Ký Số**:
   * Mỗi vé trong đơn hàng là 1 bản ghi riêng biệt với 1 mã QR độc lập (mua 4 vé = 4 mã QR riêng), cho phép đi riêng cổng hoặc chia sẻ vé cho bạn bè.
-  * Mã QR chứa **Payload Ký Số bảo mật (HMAC-SHA256)** mã hóa đầy đủ thông tin: `ticketId`, `eventId`, `ticketType`, `seatNumber`, `customerName` và chữ ký số chống giả mạo vé, hỗ trợ máy quét đọc thông tin offline ngay cả khi mất mạng.
+  * Mã QR chứa **Payload Ký Số bảo mật (HMAC-SHA256)** gồm `ticketId`, `eventId`, `showTimeId`, `ticketType`, `seatNumber`, `customerName` và chữ ký số chống giả mạo vé. Scanner luôn gửi QR đến Backend để verify và check-in online; không chấp nhận check-in offline.
 
 ### 4.3. Module Khuyến Mãi & Voucher (Promotion Module)
 * Hỗ trợ tạo mã giảm giá theo tỷ lệ phần trăm (%) hoặc số tiền cố định (VNĐ).
-* Giới hạn lượt sử dụng tổng và lượt dùng tối đa trên mỗi tài khoản người dùng.
-* Hỗ trợ **Voucher Bồi Thường (Compensation Voucher)** dành riêng cho nhóm khách hàng bị ảnh hưởng khi show hủy.
+* Giới hạn lượt sử dụng tổng (`total_usage_limit`) và lượt dùng tối đa trên mỗi tài khoản (`max_usage_per_user`).
+* `promotion_usages` lưu từng lần voucher được giữ/sử dụng theo user và order; chỉ trạng thái `COMPLETED` mới tăng `used_count`.
+* `user_promotions` lưu voucher được cấp riêng vào ví user, bao gồm voucher compensation; unique `(user_id, promotion_id)` chống cấp trùng.
 
 ### 4.4. Module Thanh Toán & Hoàn Tiền (Payment Module - Strategy Pattern)
 * Tích hợp đa cổng thanh toán qua cấu trúc **Strategy Pattern** chuẩn mở rộng.
-* **Auto-Refund Service**: Tích hợp API hoàn tiền đảo ngược giao dịch của VNPAY, MoMo.
+* Callback/IPN server-to-server của gateway là nguồn xác nhận thanh toán; `Return URL` chỉ dùng để hiển thị kết quả cho khách.
+* `payments` có unique `(method, transaction_id)` và chỉ cho phép một payment `SUCCESS/REFUNDED` trên mỗi order.
+* **Auto-Refund Service**: Tích hợp API hoàn tiền đảo ngược giao dịch của VNPAY, MoMo. Mỗi refund có `idempotency_key` duy nhất; timeout phải query hoặc retry cùng key, không tạo request mới.
 * **Escrow Management**: Theo dõi số dư tiền thu hộ của từng sự kiện.
 * Đảm bảo tính toán chính xác: Chỉ hoàn tiền dựa trên `orders.total_amount` (số tiền thực tế người mua bị trừ).
+* State transition chính: `Payment PENDING -> SUCCESS/FAILED/CANCELLED`, `Order PENDING -> PAID/EXPIRED/CANCELLED`, `Order PAID -> REFUNDED` chỉ sau khi gateway xác nhận refund thành công.
 
 ### 4.5. Module Đối Soát & Quyết Toán (Settlement Module)
 * Tự động chốt sổ doanh thu sau khi sự kiện kết thúc.
@@ -233,6 +239,7 @@ sequenceDiagram
 
 ### 4.6. Module Soát Vé Tại Cổng (Check-in Module)
 * Web App & Mobile Web quét mã QR bằng camera (dùng thư viện `html5-qrcode`).
+* Scanner luôn gửi QR đến Backend để xác thực và check-in online; không chấp nhận check-in offline.
 * Kiểm tra tính hợp lệ: Đúng sự kiện, đúng suất diễn, chưa từng check-in.
 * Chặn Double Check-in bằng Database Unique Constraint + Atomic Update.
 * Báo cáo tiến độ khách vào cổng theo thời gian thực (Real-time count).
@@ -255,6 +262,8 @@ sequenceDiagram
 ---
 
 ## 5. Thiết Kế Cơ Sở Dữ Liệu (Supabase PostgreSQL)
+
+> Migration note: `V1__init_schema.sql` là schema nền ban đầu. `V2__align_business_model.sql` là migration bổ sung và điều chỉnh để schema cuối cùng quản lý inventory theo suất, voucher theo user và tính an toàn cho payment/refund. Khi triển khai mới, Flyway chạy tuần tự V1 rồi V2.
 
 > [!NOTE]
 > **Quy chuẩn Định danh ID**: Toàn bộ các bảng trong hệ thống sử dụng kiểu dữ liệu **`UUID`** làm Khóa chính (Primary Key) với giá trị sinh mặc định `DEFAULT gen_random_uuid()` của PostgreSQL. Các Khóa ngoại (Foreign Key) tham chiếu tương ứng cũng sử dụng kiểu `UUID`. Điều này giúp:
@@ -279,13 +288,23 @@ erDiagram
     events ||--o{ banners : "quảng bá qua banner"
     ad_packages ||--o{ ad_campaigns : "được đăng ký"
     ad_campaigns ||--o{ banners : "sinh ra banner hiển thị"
+    show_times ||--o{ show_time_ticket_inventories : "tồn kho theo suất"
     ticket_types ||--|{ tickets : "phát hành"
+    ticket_types ||--o{ show_time_ticket_inventories : "cấu hình tồn kho"
     show_times ||--|{ tickets : "thuộc suất"
+    show_times ||--o{ orders : "suất được chọn"
     orders ||--|{ order_items : "chứa chi tiết"
-    orders ||--o| promotions : "áp dụng voucher"
-    order_items ||--|| ticket_types : "loại vé"
+    promotions ||--o{ orders : "được order áp dụng"
+    ticket_types ||--o{ order_items : "loại vé"
     orders ||--o{ payments : "có các lượt thanh toán (1 - N)"
     orders ||--o{ refund_logs : "lịch sử hoàn tiền"
+    payments ||--o{ refund_logs : "refund giao dịch thành công"
+    users ||--o{ user_promotions : "ví voucher"
+    promotions ||--o{ user_promotions : "voucher được cấp"
+    event_broadcasts ||--o{ user_promotions : "nguồn voucher đền bù"
+    users ||--o{ promotion_usages : "lịch sử sử dụng"
+    promotions ||--o{ promotion_usages : "được sử dụng"
+    orders ||--o| promotion_usages : "ghi nhận voucher của order"
     tickets ||--o| check_ins : "quét vé vào cổng"
 
     roles {
@@ -405,10 +424,20 @@ erDiagram
         uuid event_id FK "tham chiếu events(id)"
         varchar name "GA, VIP, VVIP..."
         decimal price
-        int total_quantity
-        int sold_quantity "denormalized counter"
         int max_per_order
         boolean is_active
+    }
+
+    show_time_ticket_inventories {
+        uuid id PK "gen_random_uuid()"
+        uuid show_time_id FK "tham chiếu show_times(id)"
+        uuid ticket_type_id FK "tham chiếu ticket_types(id)"
+        int total_quantity "tồn kho của loại vé tại suất này"
+        int reserved_quantity "đang được giữ trong order PENDING"
+        int sold_quantity "đã thanh toán thành công"
+        timestamp created_at
+        timestamp updated_at
+        string unique_key UK "show_time_id + ticket_type_id"
     }
 
     promotions {
@@ -421,6 +450,7 @@ erDiagram
         decimal min_order_amount
         decimal max_discount_amount
         int total_usage_limit
+        int max_usage_per_user "giới hạn lượt dùng của mỗi user"
         int used_count
         boolean is_compensation "true nếu là voucher đền bù show hủy"
         timestamp valid_from
@@ -428,11 +458,37 @@ erDiagram
         boolean is_active
     }
 
+    user_promotions {
+        uuid id PK "gen_random_uuid()"
+        uuid user_id FK "tham chiếu users(id)"
+        uuid promotion_id FK "tham chiếu promotions(id)"
+        varchar source "ORGANIZER, COMPENSATION, ADMIN..."
+        uuid source_broadcast_id FK "nullable: broadcast cấp voucher"
+        varchar status "AVAILABLE, USED, EXPIRED, REVOKED"
+        timestamp issued_at
+        timestamp used_at
+        timestamp created_at
+        string unique_key UK "user_id + promotion_id"
+    }
+
+    promotion_usages {
+        uuid id PK "gen_random_uuid()"
+        uuid promotion_id FK "tham chiếu promotions(id)"
+        uuid user_id FK "tham chiếu users(id)"
+        uuid order_id FK "tham chiếu orders(id)"
+        decimal discount_amount "số tiền voucher đã giảm"
+        varchar status "RESERVED, COMPLETED, RELEASED"
+        timestamp used_at
+        timestamp created_at
+        string unique_key UK "order_id"
+    }
+
     orders {
         uuid id PK "gen_random_uuid()"
         varchar order_code UK "TKZ-YYYYMMDD-XXXXX"
         uuid user_id FK "tham chiếu users(id)"
         uuid event_id FK "tham chiếu events(id)"
+        uuid show_time_id FK "tham chiếu show_times(id), mỗi order một suất"
         uuid promotion_id FK "nullable: tham chiếu promotions(id)"
         decimal subtotal "Giá gốc trước giảm"
         decimal discount_amount "Số tiền voucher đã giảm"
@@ -457,7 +513,7 @@ erDiagram
         uuid id PK "gen_random_uuid()"
         uuid order_id FK "tham chiếu orders(id) - 1 đơn có thể thử thanh toán nhiều lần"
         enum method "VNPAY, MOMO, ZALOPAY"
-        varchar transaction_id "Mã GD từ Cổng TT (lượt thanh toán thành công mới có mã chốt)"
+        varchar transaction_id UK "Mã GD; unique theo method, có thể NULL khi PENDING"
         decimal amount "Bằng đúng orders.total_amount"
         enum status "PENDING, SUCCESS, FAILED, CANCELLED, REFUNDED"
         timestamp paid_at
@@ -466,12 +522,14 @@ erDiagram
 
     refund_logs {
         uuid id PK "gen_random_uuid()"
+        uuid payment_id FK "tham chiếu payment SUCCESS/REFUNDED"
         uuid order_id FK "tham chiếu orders(id)"
         uuid event_id FK "tham chiếu events(id)"
         decimal amount "Tiền hoàn lại = orders.total_amount"
         varchar payment_method "VNPAY, MOMO"
         enum status "PROCESSING, SUCCESS, FAILED, MANUAL_BANK"
-        varchar gateway_refund_id "Mã hoàn tiền từ Cổng"
+        uuid idempotency_key UK "request ID duy nhất cho cùng một refund"
+        varchar gateway_refund_id UK "Mã hoàn tiền, unique theo payment_method"
         varchar refund_reason
         text error_message
         varchar bank_account_number "Dự phòng chuyển tay"
@@ -545,6 +603,7 @@ classDiagram
         +createPaymentUrl(PaymentRequest): PaymentResponse
         +handleCallback(Map params): PaymentResult
         +processRefund(RefundRequest): RefundResult
+        +queryRefundStatus(RefundStatusRequest): RefundResult
         +getProviderName(): String
     }
 
@@ -572,6 +631,7 @@ classDiagram
         -refundLogRepository: RefundLogRepository
         +executeSingleRefund(orderId, reason): RefundResult
         +executeBatchEventRefund(eventId, reason): BatchRefundReport
+        +retryRefund(idempotencyKey): RefundResult
     }
 
     PaymentStrategy <|.. VNPayStrategy
@@ -586,20 +646,24 @@ classDiagram
 
 | Nhóm Rủi Ro | Vấn đề tiềm ẩn | Giải pháp kỹ thuật triển khai trên Tikzy |
 | :--- | :--- | :--- |
-| **Bán vượt số lượng (Overselling)** | Hàng nghìn người cùng bấm mua vé cuối cùng gây âm kho | **3 Lớp chặn:**<br/>1. Redis Lock `SETNX lock:ticket_type:{id}`<br/>2. DB Update có điều kiện `WHERE sold_quantity + ? <= total_quantity`<br/>3. Postgres Constraint `CHECK (sold_quantity <= total_quantity)` |
-| **Lạm dụng Voucher (Coupon Abuse)** | Hàng trăm người cùng áp dụng mã giảm giá có giới hạn số lượt | Dùng **Redis Atomic Decrement (`DECR`)** để kiểm soát số lượng voucher tồn, tránh race condition vượt quota mã. |
+| **Bán vượt số lượng (Overselling)** | Hàng nghìn người cùng bấm mua vé cuối cùng gây âm kho | **3 Lớp chặn:**<br/>1. Redis Lock `SETNX lock:inventory:{showTimeId}:{ticketTypeId}`<br/>2. DB Update có điều kiện trên `reserved_quantity` / `sold_quantity`<br/>3. Postgres Constraint `CHECK (reserved_quantity + sold_quantity <= total_quantity)` trong `show_time_ticket_inventories` |
+| **Lạm dụng Voucher (Coupon Abuse)** | Hàng trăm người cùng áp dụng mã giảm giá có giới hạn số lượt | Dùng **Redis Atomic Decrement (`DECR`)** cho quota, `max_usage_per_user` cho từng tài khoản và unique `promotion_usages.order_id` để chống ghi nhận trùng. |
 | **Cạn kiệt Connection DB** | Flash sale làm nghẽn kết nối Postgres của Supabase | Sử dụng **PgBouncer Connection Pooler (Port 6543)** thay vì Direct Connection. Cấu hình HikariCP `maximum-pool-size: 15`. |
 | **Tắc nghẽn Batch Refund** | Hủy show có 10.000 vé, gọi API hoàn tiền đồng loạt gây sập server hoặc bị cổng TT chặn IP | Sử dụng **Spring Batch / Redis Queue** chia nhỏ thành từng Chunk (30-50 đơn/lần), đặt khoảng nghỉ 200ms giữa các request để tuân thủ Rate Limit của Cổng TT. |
-| **Duplicate Refund (Hoàn tiền 2 lần)** | Mạng lag khiến lệnh hoàn tiền bị gửi lặp lại | Cơ chế **Idempotency Key**: Mỗi giao dịch hoàn tạo 1 UUID duy nhất làm `RequestId` gửi sang Cổng. DB ràng buộc trạng thái `REFUNDED` trước khi kích hoạt lệnh mới. |
-| **Mất thông báo Callback** | Cổng TT trừ tiền khách nhưng mạng đứt không gọi về Tikzy | **Payment Reconciliation Scheduler**: Chạy định kỳ mỗi 5 phút kiểm tra các đơn hàng đang `PENDING` quá 15 phút, chủ động gọi Query API sang Cổng để đồng bộ trạng thái thực tế. |
+| **Duplicate Payment Callback** | Gateway gửi callback thành công nhiều lần làm phát hành vé hoặc ghi nhận tiền nhiều lần | Validate chữ ký/order/amount, conditional update chỉ từ `PENDING`, unique `(method, transaction_id)` và unique một payment `SUCCESS/REFUNDED` trên mỗi order. |
+| **Duplicate Refund (Hoàn tiền 2 lần)** | Mạng lag khiến lệnh hoàn tiền bị gửi lặp lại | `refund_logs.idempotency_key` là UUID duy nhất; `gateway_refund_id` unique theo provider. Khi timeout, query hoặc retry cùng key, không tạo request mới. |
+| **Mất thông báo Callback** | Cổng TT trừ tiền khách nhưng mạng đứt không gọi về Tikzy | **Payment Reconciliation Scheduler**: Chạy định kỳ mỗi 5 phút kiểm tra các payment `PENDING` quá 15 phút, chủ động gọi Query API sang Cổng để đồng bộ trạng thái thực tế. |
 
 ---
 
 ## 8. Danh Sách Các Module Cần Xây Dựng (Checklist Triển Khai)
 
+> Lộ trình triển khai ưu tiên hoàn tất và kiểm thử toàn bộ Backend API bằng Swagger/Postman trước khi bắt đầu Frontend.
+
 - [ ] **1. Infrastructure & Core Setup**
   - Khởi tạo Spring Boot 3.x, kết nối Supabase Postgres qua Flyway Migration.
   - Cấu hình toàn bộ Entity sử dụng **UUID** làm Primary Key (`gen_random_uuid()`).
+  - Chạy migration V2: inventory theo suất, voucher ownership/usage, payment/refund idempotency.
   - Setup Redis Docker cho Caching & Distributed Lock.
   - Cấu hình Cloudinary SDK cho Upload hình ảnh sự kiện & banner.
 - [ ] **2. Auth, RBAC & Session Management**
@@ -607,21 +671,25 @@ classDiagram
   - Đăng ký, đăng nhập, cấp phát cặp Access Token (JWT) & Refresh Token.
   - Quản lý phiên đăng nhập qua bảng `refresh_tokens`, hỗ trợ Logout (thu hồi token) và Đăng xuất khỏi mọi thiết bị.
 - [ ] **3. Event, Category & Banner Management**
-  - CRUD Sự kiện, danh mục sự kiện, suất diễn, cấu hình hạng vé.
+  - CRUD Sự kiện, danh mục sự kiện, suất diễn, cấu hình hạng vé và inventory theo từng suất.
   - Quản lý chiến dịch Banner trang chủ / Slider (`banners` table).
   - Cấu hình chính sách hoàn vé (`refund_policy`, `refund_deadline_days`).
   - Kiểm duyệt sự kiện từ Admin.
 - [ ] **4. Promotion & Voucher Module**
-  - CRUD Mã khuyến mãi, giới hạn lượt dùng, áp dụng voucher vào đơn hàng.
+  - CRUD Mã khuyến mãi, giới hạn lượt dùng tổng và giới hạn theo từng user.
+  - Lưu `user_promotions` và `promotion_usages` để quản lý ví/lịch sử voucher.
   - Hỗ trợ phát hành Voucher đền bù (Compensation Voucher).
 - [ ] **5. Order & Giữ Chỗ (Reservation)**
-  - Logic tạo đơn hàng với 2 bảng `orders` và `order_items`.
+  - Logic tạo đơn hàng gắn với đúng một `event` và một `show_time`.
   - Tính toán chính xác: `subtotal`, `discount_amount`, `total_amount`.
-  - Redis Lock chống race condition mua trùng vé.
-  - Scheduler hủy đơn hết hạn sau 15 phút, trả vé về kho.
+  - Redis Lock và database conditional update trên `show_time_ticket_inventories`.
+  - Scheduler hủy đơn hết hạn sau 15 phút, giải phóng `reserved_quantity`.
 - [ ] **6. Payment & Auto-Refund (Strategy Pattern)**
   - Tích hợp `VNPayStrategy`, `MoMoStrategy` cho thanh toán.
+  - Xác thực callback/IPN bằng chữ ký, order ID và amount; callback lặp phải là no-op.
+  - Unique `(method, transaction_id)` và chỉ một payment `SUCCESS/REFUNDED` trên mỗi order.
   - Tích hợp **Auto-Refund API** cho từng cổng thanh toán (chỉ hoàn `total_amount` thực trả).
+  - Mỗi refund có `idempotency_key` unique; timeout phải query hoặc retry bằng cùng key.
   - Batch Refund Service xử lý hoàn tiền hàng loạt khi sự kiện bị hủy.
 - [ ] **7. Organizer Broadcast & Bồi Thường**
   - Công cụ trên Dashboard cho BTC gửi thư xin lỗi đến người mua vé.
@@ -632,8 +700,9 @@ classDiagram
   - Bảng quản lý chốt sổ, tính toán % hoa hồng nền tảng và tạo lệnh chuyển tiền cho BTC sau show.
 - [ ] **9. Check-in & Scanner**
   - Sinh mã QR độc nhất bằng `ZXing` sau khi thanh toán thành công.
-  - Web Scanner quét QR vào cổng (html5-qrcode) chống quét trùng.
-- [ ] **10. Frontend React + Vite SPA**
+  - Backend verify HMAC và xử lý check-in online; không chấp nhận check-in offline.
+  - API chống quét trùng bằng Database Unique Constraint + Atomic Update.
+- [ ] **10. Frontend React + Vite SPA (triển khai sau khi Backend hoàn tất)**
   - Giao diện Khách: Hero Banner Slider trang chủ, Danh sách sự kiện, Chi tiết sự kiện, Áp voucher, Checkout countdown 15p, Ví vé & Ví voucher của tôi.
   - Giao diện BTC: Dashboard thống kê, Quản lý sự kiện/voucher, Scanner soát vé, Công cụ Broadcast thông báo/bồi thường, Xem quyết toán Escrow.
   - Giao diện Admin: Quản lý Banners, Duyệt show, Phân quyền Role, Kích hoạt hủy show & chạy Auto Refund, Quản lý dòng tiền đối soát.
