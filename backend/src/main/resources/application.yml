@@ -6,8 +6,8 @@ spring:
     # Supabase qua PgBouncer Connection Pooler (port 6543)
     # prepareThreshold=0: bắt buộc vì PgBouncer transaction mode không hỗ trợ prepared statements
     url: jdbc:postgresql://${SUPABASE_HOST:aws-0-ap-southeast-1.pooler.supabase.com}:${SUPABASE_PORT:6543}/${SUPABASE_DB:postgres}?prepareThreshold=0
-    username: ${SUPABASE_USER:postgres.your-project-ref}
-    password: ${SUPABASE_PASSWORD:your-password}
+    username: ${SUPABASE_USER}
+    password: ${SUPABASE_PASSWORD}
     hikari:
       maximum-pool-size: 15          # theo risk matrix: tránh cạn kiệt connection Supabase
       minimum-idle: 3
@@ -48,9 +48,9 @@ server:
 
 # ===== JWT (Access Token 30p + Refresh Token 7-30 ngày) =====
 jwt:
-  secret: ${JWT_SECRET:change-me-to-a-very-long-secret-key-at-least-64-characters-for-hs512}
-  access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION:1800000}        # 30 phút
-  refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION:2592000000}   # 30 ngày
+  secret: ${JWT_SECRET}
+  access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION}        # 30 phút
+  refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION}   # 30 ngày
 
 # ===== Cloudinary =====
 cloudinary:
@@ -61,7 +61,7 @@ cloudinary:
 # ===== Ticket =====
 ticket:
   reservation-ttl-minutes: 15        # giữ chỗ 15 phút (Redis lock + orders.expires_at)
-  qr-secret: ${QR_SECRET:change-me-qr-hmac-secret}  # HMAC-SHA256 ký số QR payload
+  qr-secret: ${QR_SECRET}  # HMAC-SHA256 ký số QR payload
 
 # ===== Logging =====
 logging:
