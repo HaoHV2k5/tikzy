@@ -17,7 +17,7 @@ ALTER TABLE orders
 UPDATE orders o
 SET show_time_id = t.show_time_id
 FROM (
-    SELECT order_id, MIN(show_time_id) AS show_time_id
+    SELECT order_id, (array_agg(DISTINCT show_time_id))[1] AS show_time_id
     FROM tickets
     WHERE order_id IS NOT NULL
     GROUP BY order_id
