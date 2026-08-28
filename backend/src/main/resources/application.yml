@@ -30,6 +30,9 @@ spring:
     locations: classpath:db/migration
     schemas: public
     default-schema: public
+    placeholders:
+      admin_email: ${ADMIN_EMAIL}
+      admin_password_hash: ${ADMIN_PASSWORD_HASH}
 
   data:
     redis:
