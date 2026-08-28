@@ -15,6 +15,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 /**
  * Inventory is scoped to one show time and one ticket type.
@@ -31,10 +33,12 @@ import lombok.Setter;
 )
 public class ShowTimeTicketInventory extends BaseAuditEntity {
 
+    @OnDelete(action = OnDeleteAction.CASCADE)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "show_time_id", nullable = false)
     private ShowTime showTime;
 
+    @OnDelete(action = OnDeleteAction.CASCADE)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ticket_type_id", nullable = false)
     private TicketType ticketType;

@@ -12,6 +12,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.LocalDateTime;
 
@@ -24,6 +26,7 @@ import java.time.LocalDateTime;
 @Table(name = "refresh_tokens")
 public class RefreshToken extends BaseAuditEntity {
 
+    @OnDelete(action = OnDeleteAction.CASCADE)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
@@ -31,7 +34,7 @@ public class RefreshToken extends BaseAuditEntity {
     @Column(name = "token", nullable = false, unique = true, length = 512)
     private String token;
 
-    @Column(name = "device_info")
+    @Column(name = "device_info", length = 500)
     private String deviceInfo;
 
     @Column(name = "ip_address", length = 45)

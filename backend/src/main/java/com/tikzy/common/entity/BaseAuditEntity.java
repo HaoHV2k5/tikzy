@@ -17,6 +17,6 @@ import java.time.LocalDateTime;
 public abstract class BaseAuditEntity extends BaseEntity {
 
     @UpdateTimestamp
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 }

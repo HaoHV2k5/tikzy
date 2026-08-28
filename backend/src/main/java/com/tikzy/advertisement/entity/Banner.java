@@ -39,13 +39,13 @@ public class Banner extends BaseEntity {
     @Column(name = "title")
     private String title;
 
-    @Column(name = "image_url", nullable = false)
+    @Column(name = "image_url", nullable = false, length = 500)
     private String imageUrl; // Cloudinary CDN đang hiển thị
 
-    @Column(name = "pending_image_url")
+    @Column(name = "pending_image_url", length = 500)
     private String pendingImageUrl; // ảnh mới upload đang chờ duyệt
 
-    @Column(name = "target_url")
+    @Column(name = "target_url", length = 500)
     private String targetUrl;
 
     @Enumerated(EnumType.STRING)

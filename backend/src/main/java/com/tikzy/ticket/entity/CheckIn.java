@@ -17,6 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -32,7 +33,7 @@ import java.time.LocalDateTime;
 @Table(name = "check_ins")
 public class CheckIn extends BaseEntity {
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "ticket_id", nullable = false, unique = true)
     private Ticket ticket;
 
@@ -45,6 +46,7 @@ public class CheckIn extends BaseEntity {
     @Column(name = "method", nullable = false, length = 20)
     private CheckInMethod method = CheckInMethod.QR_SCAN;
 
+    @CreationTimestamp
     @Column(name = "checked_in_at", nullable = false)
     private LocalDateTime checkedInAt;
 }

@@ -61,17 +61,17 @@ public class RefundLog extends BaseEntity {
     @Column(name = "idempotency_key", nullable = false, unique = true, updatable = false)
     private UUID idempotencyKey = UUID.randomUUID();
 
-    @Column(name = "refund_reason")
+    @Column(name = "refund_reason", length = 500)
     private String refundReason;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
     // Dự phòng chuyển tay khi API refund lỗi / quá hạn 90 ngày
-    @Column(name = "bank_account_number")
+    @Column(name = "bank_account_number", length = 50)
     private String bankAccountNumber;
 
-    @Column(name = "bank_name")
+    @Column(name = "bank_name", length = 100)
     private String bankName;
 
     @Column(name = "bank_account_holder")

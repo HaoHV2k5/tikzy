@@ -46,7 +46,7 @@ public class EventBroadcast extends BaseEntity {
     @Column(name = "target_audience", nullable = false, length = 30)
     private TargetAudience targetAudience;
 
-    @Column(name = "title", nullable = false)
+    @Column(name = "title", nullable = false, length = 500)
     private String title;
 
     @Column(name = "message_content", nullable = false, columnDefinition = "TEXT")

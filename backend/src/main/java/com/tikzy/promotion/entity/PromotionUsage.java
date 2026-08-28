@@ -3,11 +3,15 @@ package com.tikzy.promotion.entity;
 import com.tikzy.auth.entity.User;
 import com.tikzy.common.entity.BaseEntity;
 import com.tikzy.order.entity.Order;
+import com.tikzy.promotion.enums.PromotionUsageStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -39,7 +43,7 @@ public class PromotionUsage extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
@@ -47,8 +51,9 @@ public class PromotionUsage extends BaseEntity {
     private BigDecimal discountAmount;
 
     @Builder.Default
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private String status = "RESERVED";
+    private PromotionUsageStatus status = PromotionUsageStatus.RESERVED;
 
     @Column(name = "used_at")
     private LocalDateTime usedAt;

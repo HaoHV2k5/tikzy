@@ -38,7 +38,7 @@ public class Event extends BaseEntity {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    @Column(name = "title", nullable = false)
+    @Column(name = "title", nullable = false, length = 500)
     private String title;
 
     @Column(name = "description", columnDefinition = "TEXT")
@@ -47,13 +47,13 @@ public class Event extends BaseEntity {
     @Column(name = "venue_name")
     private String venueName;
 
-    @Column(name = "venue_address")
+    @Column(name = "venue_address", length = 500)
     private String venueAddress;
 
-    @Column(name = "banner_url")
+    @Column(name = "banner_url", length = 500)
     private String bannerUrl; // Cloudinary
 
-    @Column(name = "thumbnail_url")
+    @Column(name = "thumbnail_url", length = 500)
     private String thumbnailUrl; // Cloudinary
 
     @Builder.Default

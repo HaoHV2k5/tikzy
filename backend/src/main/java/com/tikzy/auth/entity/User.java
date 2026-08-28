@@ -38,7 +38,7 @@ public class User extends BaseEntity {
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
-    @Column(name = "avatar_url")
+    @Column(name = "avatar_url", length = 500)
     private String avatarUrl; // Cloudinary
 
     @Builder.Default

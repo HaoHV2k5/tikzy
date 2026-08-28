@@ -3,8 +3,11 @@ package com.tikzy.promotion.entity;
 import com.tikzy.auth.entity.User;
 import com.tikzy.broadcast.entity.EventBroadcast;
 import com.tikzy.common.entity.BaseEntity;
+import com.tikzy.promotion.enums.UserPromotionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -15,6 +18,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.LocalDateTime;
 
@@ -30,6 +36,7 @@ import java.time.LocalDateTime;
 )
 public class UserPromotion extends BaseEntity {
 
+    @OnDelete(action = OnDeleteAction.CASCADE)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
@@ -46,9 +53,11 @@ public class UserPromotion extends BaseEntity {
     private EventBroadcast sourceBroadcast;
 
     @Builder.Default
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private String status = "AVAILABLE";
+    private UserPromotionStatus status = UserPromotionStatus.AVAILABLE;
 
+    @CreationTimestamp
     @Column(name = "issued_at", nullable = false)
     private LocalDateTime issuedAt;
 

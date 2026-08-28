@@ -11,6 +11,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,8 +35,8 @@ import java.time.LocalDateTime;
 @Table(name = "settlements")
 public class Settlement extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "event_id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "event_id", nullable = false, unique = true)
     private Event event;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -68,16 +69,16 @@ public class Settlement extends BaseEntity {
     private SettlementStatus status = SettlementStatus.PENDING;
 
     // TK nhận tiền của BTC
-    @Column(name = "bank_name")
+    @Column(name = "bank_name", length = 100)
     private String bankName;
 
-    @Column(name = "bank_account_number")
+    @Column(name = "bank_account_number", length = 50)
     private String bankAccountNumber;
 
     @Column(name = "bank_account_holder")
     private String bankAccountHolder;
 
-    @Column(name = "bank_transfer_reference")
+    @Column(name = "bank_transfer_reference", length = 100)
     private String bankTransferReference; // mã UNC chuyển khoản
 
     @Column(name = "settled_at")

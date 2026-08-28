@@ -25,7 +25,7 @@ public class Category extends BaseEntity {
     @Column(name = "slug", nullable = false, unique = true, length = 100)
     private String slug;
 
-    @Column(name = "icon_url")
+    @Column(name = "icon_url", length = 500)
     private String iconUrl; // Cloudinary
 
     @Builder.Default
