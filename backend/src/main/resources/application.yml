@@ -54,6 +54,9 @@ jwt:
   secret: ${JWT_SECRET}
   access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION}        # 30 phút
   refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION}   # 30 ngày
+  refresh-token-cookie-name: ${JWT_REFRESH_COOKIE_NAME:refresh_token}
+  refresh-token-cookie-secure: ${JWT_REFRESH_COOKIE_SECURE:false} # true khi chạy HTTPS
+  refresh-token-cookie-same-site: ${JWT_REFRESH_COOKIE_SAME_SITE:Lax}
 
 # ===== Cloudinary =====
 cloudinary:
