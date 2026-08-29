@@ -4,35 +4,61 @@ import com.tikzy.auth.dto.request.LoginRequest;
 import com.tikzy.auth.dto.request.RegisterRequest;
 import com.tikzy.auth.dto.response.AuthResponse;
 import com.tikzy.auth.dto.response.UserResponse;
+import com.tikzy.auth.entity.RefreshToken;
 import com.tikzy.auth.entity.Role;
 import com.tikzy.auth.entity.User;
 import com.tikzy.auth.mapper.UserMapper;
 import com.tikzy.auth.repository.RoleRepository;
+import com.tikzy.auth.repository.RefreshTokenRepository;
 import com.tikzy.auth.repository.UserRepository;
+import com.tikzy.common.config.JwtTokenProvider;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
-import com.tikzy.common.config.JwtTokenProvider;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.Locale;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AuthService {
 
     private static final String DEFAULT_ROLE_CODE = "ROLE_CUSTOMER";
+    private static final int REFRESH_TOKEN_BYTES = 64;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserMapper userMapper;
+    private final long refreshTokenExpirationMs;
+
+    public AuthService(
+            UserRepository userRepository,
+            RoleRepository roleRepository,
+            RefreshTokenRepository refreshTokenRepository,
+            PasswordEncoder passwordEncoder,
+            JwtTokenProvider jwtTokenProvider,
+            UserMapper userMapper,
+            @Value("${jwt.refresh-token-expiration-ms}") long refreshTokenExpirationMs) {
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtTokenProvider = jwtTokenProvider;
+        this.userMapper = userMapper;
+        this.refreshTokenExpirationMs = refreshTokenExpirationMs;
+    }
 
     @Transactional
     public UserResponse register(RegisterRequest request) {
@@ -63,8 +89,13 @@ public class AuthService {
         return userMapper.toUserResponse(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
+        return login(request, null, null);
+    }
+
+    @Transactional
+    public AuthResponse login(LoginRequest request, String deviceInfo, String ipAddress) {
         User user = userRepository.findByEmail(normalizeEmail(request.getEmail()))
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_CREDENTIALS));
 
@@ -76,12 +107,37 @@ public class AuthService {
         }
 
         String accessToken = jwtTokenProvider.generateAccessToken(user);
+        String refreshTokenValue = generateRefreshToken();
+        refreshTokenRepository.save(RefreshToken.builder()
+                .user(user)
+                .token(refreshTokenValue)
+                .deviceInfo(normalizeForStorage(deviceInfo, 500))
+                .ipAddress(normalizeForStorage(ipAddress, 45))
+                .expiresAt(LocalDateTime.now().plus(Duration.ofMillis(refreshTokenExpirationMs)))
+                .isRevoked(false)
+                .build());
+
         log.info("Đăng nhập thành công: {}", user.getEmail());
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .expiresIn(jwtTokenProvider.getAccessTokenExpirationSeconds())
                 .user(userMapper.toUserResponse(user))
+                .refreshToken(refreshTokenValue)
                 .build();
+    }
+
+    private String generateRefreshToken() {
+        byte[] tokenBytes = new byte[REFRESH_TOKEN_BYTES];
+        SECURE_RANDOM.nextBytes(tokenBytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+    }
+
+    private String normalizeForStorage(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.length() > maxLength ? normalized.substring(0, maxLength) : normalized;
     }
 
     private String normalizeEmail(String email) {

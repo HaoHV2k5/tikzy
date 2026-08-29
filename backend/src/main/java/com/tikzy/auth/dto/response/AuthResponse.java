@@ -1,5 +1,6 @@
 package com.tikzy.auth.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -16,4 +17,11 @@ public class AuthResponse {
     private long expiresIn;
 
     private UserResponse user;
+
+    private String refreshToken;
+
+    @JsonIgnore
+    public String getRefreshToken() {
+        return refreshToken;
+    }
 }

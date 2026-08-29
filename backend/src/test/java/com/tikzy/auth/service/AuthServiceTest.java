@@ -4,10 +4,12 @@ import com.tikzy.auth.dto.request.LoginRequest;
 import com.tikzy.auth.dto.request.RegisterRequest;
 import com.tikzy.auth.dto.response.AuthResponse;
 import com.tikzy.auth.dto.response.UserResponse;
+import com.tikzy.auth.entity.RefreshToken;
 import com.tikzy.auth.entity.Role;
 import com.tikzy.auth.entity.User;
 import com.tikzy.auth.mapper.UserMapper;
 import com.tikzy.auth.repository.RoleRepository;
+import com.tikzy.auth.repository.RefreshTokenRepository;
 import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
@@ -26,6 +28,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,6 +47,8 @@ class AuthServiceTest {
     @Mock
     private RoleRepository roleRepository;
     @Mock
+    private RefreshTokenRepository refreshTokenRepository;
+    @Mock
     private JwtTokenProvider jwtTokenProvider;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -55,7 +60,14 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, roleRepository, passwordEncoder, jwtTokenProvider, userMapper);
+        authService = new AuthService(
+                userRepository,
+                roleRepository,
+                refreshTokenRepository,
+                passwordEncoder,
+                jwtTokenProvider,
+                userMapper,
+                2_592_000_000L);
         customerRole = Role.builder().code("ROLE_CUSTOMER").name("Khách hàng").build();
         customerRole.setId(UUID.randomUUID());
     }
@@ -145,16 +157,28 @@ class AuthServiceTest {
 
     @Test
     void login_success_returnsAccessToken() {
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(existingUser(true)));
+        User user = existingUser(true);
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
         when(jwtTokenProvider.generateAccessToken(any(User.class))).thenReturn("jwt-token");
         lenient().when(jwtTokenProvider.getAccessTokenExpirationSeconds()).thenReturn(1800L);
 
-        AuthResponse response = authService.login(loginRequest());
+        AuthResponse response = authService.login(loginRequest(), "Mozilla/5.0", "203.0.113.42");
+
+        org.mockito.ArgumentCaptor<RefreshToken> captor =
+                org.mockito.ArgumentCaptor.forClass(RefreshToken.class);
+        org.mockito.Mockito.verify(refreshTokenRepository).save(captor.capture());
+        RefreshToken savedRefreshToken = captor.getValue();
 
         assertEquals("jwt-token", response.getAccessToken());
         assertEquals("Bearer", response.getTokenType());
         assertEquals(1800L, response.getExpiresIn());
         assertEquals("user@example.com", response.getUser().getEmail());
+        assertEquals(response.getRefreshToken(), savedRefreshToken.getToken());
+        assertEquals(user, savedRefreshToken.getUser());
+        assertEquals("Mozilla/5.0", savedRefreshToken.getDeviceInfo());
+        assertEquals("203.0.113.42", savedRefreshToken.getIpAddress());
+        assertFalse(savedRefreshToken.getIsRevoked());
+        assertTrue(savedRefreshToken.getExpiresAt().isAfter(LocalDateTime.now()));
     }
 
     @Test
