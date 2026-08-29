@@ -16,6 +16,7 @@ public enum ErrorCode {
     INVALID_REFRESH_TOKEN(1005, "Refresh token không hợp lệ hoặc đã hết hạn", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REVOKED(1006, "Phiên đăng nhập đã bị thu hồi", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(1007, "Bạn không có quyền truy cập", HttpStatus.FORBIDDEN),
+    ACCOUNT_DISABLED(1008, "Tài khoản đã bị vô hiệu hóa", HttpStatus.FORBIDDEN),
 
     // Event 2xxx
     EVENT_NOT_FOUND(2001, "Không tìm thấy sự kiện", HttpStatus.NOT_FOUND),
