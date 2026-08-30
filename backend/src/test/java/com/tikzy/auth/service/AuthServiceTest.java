@@ -35,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -205,5 +207,81 @@ class AuthServiceTest {
 
         AppException ex = assertThrows(AppException.class, () -> authService.login(loginRequest()));
         assertEquals(ErrorCode.ACCOUNT_DISABLED, ex.getErrorCode());
+    }
+
+    @Test
+    void refresh_success_revokesCurrentAndPersistsRotatedToken() {
+        User user = existingUser(true);
+        RefreshToken currentToken = RefreshToken.builder()
+                .user(user)
+                .token("old-refresh-token")
+                .deviceInfo("Old browser")
+                .ipAddress("192.0.2.10")
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .isRevoked(false)
+                .build();
+        when(refreshTokenRepository.findByToken("old-refresh-token")).thenReturn(Optional.of(currentToken));
+        when(jwtTokenProvider.generateAccessToken(user)).thenReturn("rotated-access-token");
+        when(jwtTokenProvider.getAccessTokenExpirationSeconds()).thenReturn(1800L);
+
+        AuthResponse response = authService.refresh(
+                "old-refresh-token", "New browser", "198.51.100.20");
+
+        org.mockito.ArgumentCaptor<RefreshToken> captor =
+                org.mockito.ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository).save(captor.capture());
+        RefreshToken rotatedToken = captor.getValue();
+
+        assertTrue(currentToken.getIsRevoked());
+        assertEquals("rotated-access-token", response.getAccessToken());
+        assertNotEquals("old-refresh-token", rotatedToken.getToken());
+        assertEquals(response.getRefreshToken(), rotatedToken.getToken());
+        assertEquals(user, rotatedToken.getUser());
+        assertEquals("New browser", rotatedToken.getDeviceInfo());
+        assertEquals("198.51.100.20", rotatedToken.getIpAddress());
+        assertFalse(rotatedToken.getIsRevoked());
+        assertTrue(rotatedToken.getExpiresAt().isAfter(LocalDateTime.now()));
+    }
+
+    @Test
+    void refresh_reusedToken_revokesAllUserSessions() {
+        User user = existingUser(true);
+        RefreshToken reusedToken = RefreshToken.builder()
+                .user(user)
+                .token("reused-refresh-token")
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .isRevoked(true)
+                .build();
+        when(refreshTokenRepository.findByToken("reused-refresh-token"))
+                .thenReturn(Optional.of(reusedToken));
+
+        AppException ex = assertThrows(
+                AppException.class,
+                () -> authService.refresh("reused-refresh-token", "Browser", "203.0.113.10"));
+
+        assertEquals(ErrorCode.REFRESH_TOKEN_REUSED, ex.getErrorCode());
+        verify(refreshTokenRepository).revokeAllActiveByUser(user);
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void refresh_expiredToken_isRevokedAndRejected() {
+        User user = existingUser(true);
+        RefreshToken expiredToken = RefreshToken.builder()
+                .user(user)
+                .token("expired-refresh-token")
+                .expiresAt(LocalDateTime.now().minusMinutes(1))
+                .isRevoked(false)
+                .build();
+        when(refreshTokenRepository.findByToken("expired-refresh-token"))
+                .thenReturn(Optional.of(expiredToken));
+
+        AppException ex = assertThrows(
+                AppException.class,
+                () -> authService.refresh("expired-refresh-token", null, null));
+
+        assertEquals(ErrorCode.INVALID_REFRESH_TOKEN, ex.getErrorCode());
+        assertTrue(expiredToken.getIsRevoked());
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
     }
 }

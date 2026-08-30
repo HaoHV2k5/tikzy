@@ -28,6 +28,7 @@ class AuthApiDocsTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/register']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/login']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/refresh']").exists())
                 .andExpect(jsonPath("$.info.title").value(containsString("Tikzy")));
     }
 }
