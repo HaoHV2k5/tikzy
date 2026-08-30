@@ -14,8 +14,8 @@ import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.common.config.JwtTokenProvider;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
-import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -126,6 +126,58 @@ public class AuthService {
                 .build();
     }
 
+    /**
+     * Rotates a refresh token while holding a database lock on the current row.
+     * AppException must not roll back revocations made during reuse detection.
+     */
+    @Transactional(noRollbackFor = AppException.class)
+    public AuthResponse refresh(String refreshToken, String deviceInfo, String ipAddress) {
+        if (!StringUtils.hasText(refreshToken)) {
+            throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
+
+        RefreshToken currentToken = refreshTokenRepository.findByToken(refreshToken.trim())
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_REFRESH_TOKEN));
+        User user = currentToken.getUser();
+
+        if (Boolean.TRUE.equals(currentToken.getIsRevoked())) {
+            refreshTokenRepository.revokeAllActiveByUser(user);
+            log.warn("Phát hiện refresh token bị tái sử dụng: userId={}", user.getId());
+            throw new AppException(ErrorCode.REFRESH_TOKEN_REUSED);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (currentToken.getExpiresAt() == null || !currentToken.getExpiresAt().isAfter(now)) {
+            currentToken.setIsRevoked(true);
+            throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
+
+        if (Boolean.FALSE.equals(user.getIsActive())) {
+            refreshTokenRepository.revokeAllActiveByUser(user);
+            throw new AppException(ErrorCode.ACCOUNT_DISABLED);
+        }
+
+        currentToken.setIsRevoked(true);
+        String accessToken = jwtTokenProvider.generateAccessToken(user);
+        String rotatedTokenValue = generateRefreshToken();
+        refreshTokenRepository.save(RefreshToken.builder()
+                .user(user)
+                .token(rotatedTokenValue)
+                .deviceInfo(metadataOrPrevious(deviceInfo, currentToken.getDeviceInfo(), 500))
+                .ipAddress(metadataOrPrevious(ipAddress, currentToken.getIpAddress(), 45))
+                .expiresAt(now.plus(Duration.ofMillis(refreshTokenExpirationMs)))
+                .isRevoked(false)
+                .build());
+
+        log.info("Refresh token đã được rotate: userId={}", user.getId());
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .expiresIn(jwtTokenProvider.getAccessTokenExpirationSeconds())
+                .user(userMapper.toUserResponse(user))
+                .refreshToken(rotatedTokenValue)
+                .build();
+    }
+
     private String generateRefreshToken() {
         byte[] tokenBytes = new byte[REFRESH_TOKEN_BYTES];
         SECURE_RANDOM.nextBytes(tokenBytes);
@@ -138,6 +190,11 @@ public class AuthService {
         }
         String normalized = value.trim();
         return normalized.length() > maxLength ? normalized.substring(0, maxLength) : normalized;
+    }
+
+    private String metadataOrPrevious(String value, String previousValue, int maxLength) {
+        String normalized = normalizeForStorage(value, maxLength);
+        return normalized != null ? normalized : previousValue;
     }
 
     private String normalizeEmail(String email) {

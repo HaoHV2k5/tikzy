@@ -5,7 +5,9 @@ import com.tikzy.auth.dto.request.RegisterRequest;
 import com.tikzy.auth.dto.response.AuthResponse;
 import com.tikzy.auth.dto.response.UserResponse;
 import com.tikzy.auth.service.AuthService;
+import com.tikzy.common.exception.AppException;
 import com.tikzy.common.response.ApiResponse;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -55,15 +57,59 @@ public class AuthController {
                 loginRequest,
                 request.getHeader(HttpHeaders.USER_AGENT),
                 resolveClientIp(request));
-        ResponseCookie refreshCookie = ResponseCookie.from(refreshTokenCookieName, authResponse.getRefreshToken())
+        setRefreshTokenCookie(response, authResponse.getRefreshToken());
+        return ApiResponse.ok("Đăng nhập thành công", authResponse);
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<AuthResponse> refresh(
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        try {
+            AuthResponse authResponse = authService.refresh(
+                    resolveRefreshToken(request),
+                    request.getHeader(HttpHeaders.USER_AGENT),
+                    resolveClientIp(request));
+            setRefreshTokenCookie(response, authResponse.getRefreshToken());
+            return ApiResponse.ok("Làm mới token thành công", authResponse);
+        } catch (AppException ex) {
+            clearRefreshTokenCookie(response);
+            throw ex;
+        }
+    }
+
+    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        response.addHeader(HttpHeaders.SET_COOKIE, buildRefreshTokenCookie(
+                refreshToken, Duration.ofMillis(refreshTokenExpirationMs)).toString());
+    }
+
+    private void clearRefreshTokenCookie(HttpServletResponse response) {
+        response.addHeader(HttpHeaders.SET_COOKIE, buildRefreshTokenCookie(
+                "", Duration.ZERO).toString());
+    }
+
+    private ResponseCookie buildRefreshTokenCookie(String value, Duration maxAge) {
+        return ResponseCookie.from(refreshTokenCookieName, value)
                 .httpOnly(true)
                 .secure(refreshTokenCookieSecure)
                 .sameSite(refreshTokenCookieSameSite)
                 .path(REFRESH_TOKEN_COOKIE_PATH)
-                .maxAge(Duration.ofMillis(refreshTokenExpirationMs))
+                .maxAge(maxAge)
                 .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
-        return ApiResponse.ok("Đăng nhập thành công", authResponse);
+    }
+
+    private String resolveRefreshToken(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+
+        for (Cookie cookie : cookies) {
+            if (refreshTokenCookieName.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 
     private String resolveClientIp(HttpServletRequest request) {
