@@ -15,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,6 +29,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class AuthController {
 
+    private static final String BEARER_PREFIX = "Bearer ";
     private static final String REFRESH_TOKEN_COOKIE_PATH = "/api/v1/auth";
 
     private final AuthService authService;
@@ -78,6 +81,25 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        authService.logout(resolveRefreshToken(request), resolveAccessToken(request));
+        clearRefreshTokenCookie(response);
+        return ApiResponse.ok("Đăng xuất thành công", null);
+    }
+
+    @PostMapping("/logout-all")
+    public ApiResponse<Void> logoutAll(
+            Authentication authentication,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        authService.logoutAll(resolveAuthenticatedEmail(authentication), resolveRefreshToken(request));
+        clearRefreshTokenCookie(response);
+        return ApiResponse.ok("Đã đăng xuất khỏi tất cả thiết bị", null);
+    }
+
     private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
         response.addHeader(HttpHeaders.SET_COOKIE, buildRefreshTokenCookie(
                 refreshToken, Duration.ofMillis(refreshTokenExpirationMs)).toString());
@@ -110,6 +132,23 @@ public class AuthController {
             }
         }
         return null;
+    }
+
+    private String resolveAccessToken(HttpServletRequest request) {
+        String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+            return null;
+        }
+        return authorization.substring(BEARER_PREFIX.length()).trim();
+    }
+
+    private String resolveAuthenticatedEmail(Authentication authentication) {
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            return null;
+        }
+        return authentication.getName();
     }
 
     private String resolveClientIp(HttpServletRequest request) {

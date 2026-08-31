@@ -14,6 +14,7 @@ import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.common.config.JwtTokenProvider;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
+import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -40,6 +41,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final AccessTokenRevocationService accessTokenRevocationService;
     private final UserMapper userMapper;
     private final long refreshTokenExpirationMs;
 
@@ -49,6 +51,7 @@ public class AuthService {
             RefreshTokenRepository refreshTokenRepository,
             PasswordEncoder passwordEncoder,
             JwtTokenProvider jwtTokenProvider,
+            AccessTokenRevocationService accessTokenRevocationService,
             UserMapper userMapper,
             @Value("${jwt.refresh-token-expiration-ms}") long refreshTokenExpirationMs) {
         this.userRepository = userRepository;
@@ -56,6 +59,7 @@ public class AuthService {
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.accessTokenRevocationService = accessTokenRevocationService;
         this.userMapper = userMapper;
         this.refreshTokenExpirationMs = refreshTokenExpirationMs;
     }
@@ -141,7 +145,7 @@ public class AuthService {
         User user = currentToken.getUser();
 
         if (Boolean.TRUE.equals(currentToken.getIsRevoked())) {
-            refreshTokenRepository.revokeAllActiveByUser(user);
+            revokeAllSessions(user);
             log.warn("Phát hiện refresh token bị tái sử dụng: userId={}", user.getId());
             throw new AppException(ErrorCode.REFRESH_TOKEN_REUSED);
         }
@@ -153,7 +157,7 @@ public class AuthService {
         }
 
         if (Boolean.FALSE.equals(user.getIsActive())) {
-            refreshTokenRepository.revokeAllActiveByUser(user);
+            revokeAllSessions(user);
             throw new AppException(ErrorCode.ACCOUNT_DISABLED);
         }
 
@@ -176,6 +180,79 @@ public class AuthService {
                 .user(userMapper.toUserResponse(user))
                 .refreshToken(rotatedTokenValue)
                 .build();
+    }
+
+    /**
+     * Thu hồi refresh token của thiết bị hiện tại. Logout được thiết kế
+     * idempotent để client có thể gọi lại khi token đã hết hạn hoặc đã bị revoke.
+     */
+    @Transactional
+    public void logout(String refreshToken) {
+        logout(refreshToken, null);
+    }
+
+    /**
+     * Thu hồi refresh token và blacklist access token hiện tại của thiết bị.
+     * Access token không hợp lệ được bỏ qua để logout vẫn idempotent.
+     */
+    @Transactional
+    public void logout(String refreshToken, String accessToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            blacklistAccessToken(accessToken);
+            return;
+        }
+
+        refreshTokenRepository.findByToken(refreshToken.trim())
+                .ifPresent(token -> token.setIsRevoked(true));
+        blacklistAccessToken(accessToken);
+    }
+
+    /**
+     * Thu hồi toàn bộ refresh token của user. Email từ access token được ưu tiên;
+     * refresh token là fallback cho trường hợp access token đã hết hạn.
+     */
+    @Transactional
+    public void logoutAll(String email, String refreshToken) {
+        User user = findUserForLogout(email, refreshToken);
+        if (user != null) {
+            User lockedUser = lockUserForLogout(user);
+            revokeAllSessions(lockedUser);
+        }
+    }
+
+    private void revokeAllSessions(User user) {
+        accessTokenRevocationService.invalidateAll(user);
+        refreshTokenRepository.revokeAllActiveByUser(user);
+    }
+
+    private void blacklistAccessToken(String accessToken) {
+        if (!StringUtils.hasText(accessToken) || !jwtTokenProvider.validateToken(accessToken)) {
+            return;
+        }
+
+        Claims claims = jwtTokenProvider.getClaims(accessToken);
+        accessTokenRevocationService.blacklist(claims);
+    }
+
+    private User lockUserForLogout(User user) {
+        if (user.getId() == null) {
+            return user;
+        }
+        return userRepository.findByIdForUpdate(user.getId()).orElse(user);
+    }
+
+    private User findUserForLogout(String email, String refreshToken) {
+        if (StringUtils.hasText(email)) {
+            return userRepository.findByEmail(normalizeEmail(email)).orElse(null);
+        }
+
+        if (StringUtils.hasText(refreshToken)) {
+            return refreshTokenRepository.findByToken(refreshToken.trim())
+                    .map(RefreshToken::getUser)
+                    .orElse(null);
+        }
+
+        return null;
     }
 
     private String generateRefreshToken() {

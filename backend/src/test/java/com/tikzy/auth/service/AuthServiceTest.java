@@ -14,6 +14,7 @@ import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
 import com.tikzy.common.config.JwtTokenProvider;
+import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,8 @@ class AuthServiceTest {
     private RefreshTokenRepository refreshTokenRepository;
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+    @Mock
+    private AccessTokenRevocationService accessTokenRevocationService;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final UserMapper userMapper = Mappers.getMapper(UserMapper.class);
@@ -68,6 +71,7 @@ class AuthServiceTest {
                 refreshTokenRepository,
                 passwordEncoder,
                 jwtTokenProvider,
+                accessTokenRevocationService,
                 userMapper,
                 2_592_000_000L);
         customerRole = Role.builder().code("ROLE_CUSTOMER").name("Khách hàng").build();
@@ -283,5 +287,68 @@ class AuthServiceTest {
         assertEquals(ErrorCode.INVALID_REFRESH_TOKEN, ex.getErrorCode());
         assertTrue(expiredToken.getIsRevoked());
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void logout_revokesOnlyCurrentDeviceToken() {
+        User user = existingUser(true);
+        RefreshToken currentToken = RefreshToken.builder()
+                .user(user)
+                .token("current-device-token")
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .isRevoked(false)
+                .build();
+        when(refreshTokenRepository.findByToken("current-device-token"))
+                .thenReturn(Optional.of(currentToken));
+
+        authService.logout(" current-device-token ");
+
+        assertTrue(currentToken.getIsRevoked());
+        verify(refreshTokenRepository).findByToken("current-device-token");
+        verify(refreshTokenRepository, never()).revokeAllActiveByUser(any(User.class));
+    }
+
+    @Test
+    void logout_blacklistsCurrentAccessToken() {
+        Claims claims = org.mockito.Mockito.mock(Claims.class);
+        when(jwtTokenProvider.validateToken("access-token")).thenReturn(true);
+        when(jwtTokenProvider.getClaims("access-token")).thenReturn(claims);
+
+        authService.logout(null, "access-token");
+
+        verify(accessTokenRevocationService).blacklist(claims);
+        verify(refreshTokenRepository, never()).findByToken(any(String.class));
+    }
+
+    @Test
+    void logoutAll_withAuthenticatedUser_revokesAllSessions() {
+        User user = existingUser(true);
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+
+        authService.logoutAll(" User@Example.com ", null);
+
+        verify(userRepository).findByEmail("user@example.com");
+        verify(userRepository).findByIdForUpdate(user.getId());
+        verify(accessTokenRevocationService).invalidateAll(user);
+        verify(refreshTokenRepository).revokeAllActiveByUser(user);
+        verify(refreshTokenRepository, never()).findByToken(any(String.class));
+    }
+
+    @Test
+    void logoutAll_withoutAccessToken_usesCurrentDeviceTokenAsFallback() {
+        User user = existingUser(true);
+        RefreshToken currentToken = RefreshToken.builder()
+                .user(user)
+                .token("current-device-token")
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .isRevoked(false)
+                .build();
+        when(refreshTokenRepository.findByToken("current-device-token"))
+                .thenReturn(Optional.of(currentToken));
+
+        authService.logoutAll(null, " current-device-token ");
+
+        verify(refreshTokenRepository).findByToken("current-device-token");
+        verify(refreshTokenRepository).revokeAllActiveByUser(user);
     }
 }
