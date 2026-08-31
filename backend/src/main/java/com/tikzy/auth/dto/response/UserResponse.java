@@ -16,5 +16,6 @@ public class UserResponse {
     private String fullName;
     private String avatarUrl;
     private String role;
+    private Boolean isActive;
     private LocalDateTime createdAt;
 }

@@ -18,6 +18,8 @@ public enum ErrorCode {
     UNAUTHORIZED(1007, "Bạn không có quyền truy cập", HttpStatus.FORBIDDEN),
     ACCOUNT_DISABLED(1008, "Tài khoản đã bị vô hiệu hóa", HttpStatus.FORBIDDEN),
     REFRESH_TOKEN_REUSED(1009, "Refresh token đã bị tái sử dụng, vui lòng đăng nhập lại", HttpStatus.UNAUTHORIZED),
+    INVALID_USER_DATA(1010, "Thông tin người dùng không hợp lệ", HttpStatus.BAD_REQUEST),
+    ROLE_NOT_FOUND(1011, "Vai trò không tồn tại", HttpStatus.BAD_REQUEST),
 
     // Event 2xxx
     EVENT_NOT_FOUND(2001, "Không tìm thấy sự kiện", HttpStatus.NOT_FOUND),
