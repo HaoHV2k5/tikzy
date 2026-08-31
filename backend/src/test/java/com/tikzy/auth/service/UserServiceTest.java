@@ -1,10 +1,13 @@
 package com.tikzy.auth.service;
 
+import com.tikzy.auth.dto.request.AdminUpdateUserRequest;
 import com.tikzy.auth.dto.request.UpdateProfileRequest;
 import com.tikzy.auth.dto.response.UserResponse;
 import com.tikzy.auth.entity.Role;
 import com.tikzy.auth.entity.User;
 import com.tikzy.auth.mapper.UserMapper;
+import com.tikzy.auth.repository.RefreshTokenRepository;
+import com.tikzy.auth.repository.RoleRepository;
 import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
@@ -32,13 +35,24 @@ class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private RoleRepository roleRepository;
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
+    @Mock
+    private AccessTokenRevocationService accessTokenRevocationService;
 
     private final UserMapper userMapper = Mappers.getMapper(UserMapper.class);
     private UserService userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, userMapper);
+        userService = new UserService(
+                userRepository,
+                roleRepository,
+                refreshTokenRepository,
+                accessTokenRevocationService,
+                userMapper);
     }
 
     @Test
@@ -114,6 +128,87 @@ class UserServiceTest {
 
         assertEquals(ErrorCode.PHONE_ALREADY_EXISTS, exception.getErrorCode());
         verify(userRepository, never()).save(user);
+    }
+
+    @Test
+    void updateUserByAdmin_updatesProfileRoleAndStatusAndRevokesSessions() {
+        UUID userId = UUID.randomUUID();
+        User user = existingUser();
+        user.setId(userId);
+        Role organizerRole = Role.builder()
+                .code("ROLE_ORGANIZER")
+                .name("Ban tổ chức")
+                .build();
+        AdminUpdateUserRequest request = new AdminUpdateUserRequest();
+        request.setFullName("  Updated User  ");
+        request.setPhone("0912345678");
+        request.setAvatarUrl(" https://cdn.example.com/new.png ");
+        request.setRole("ROLE_ORGANIZER");
+        request.setIsActive(false);
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+        when(userRepository.existsByPhoneAndIdNot("0912345678", userId)).thenReturn(false);
+        when(roleRepository.findByCode("ROLE_ORGANIZER")).thenReturn(Optional.of(organizerRole));
+        when(userRepository.save(user)).thenReturn(user);
+
+        UserResponse response = userService.updateUserByAdmin(userId, request);
+
+        assertEquals("user@example.com", user.getEmail());
+        assertEquals("Updated User", user.getFullName());
+        assertEquals("0912345678", user.getPhone());
+        assertEquals("https://cdn.example.com/new.png", user.getAvatarUrl());
+        assertEquals("ROLE_ORGANIZER", user.getRole().getCode());
+        assertEquals(false, user.getIsActive());
+        assertEquals("ROLE_ORGANIZER", response.getRole());
+        assertEquals(false, response.getIsActive());
+        verify(accessTokenRevocationService).invalidateAll(user);
+        verify(refreshTokenRepository).revokeAllActiveByUser(user);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void updateUserByAdmin_duplicatePhone_throwsWithoutSaving() {
+        UUID userId = UUID.randomUUID();
+        User user = existingUser();
+        user.setId(userId);
+        AdminUpdateUserRequest request = new AdminUpdateUserRequest();
+        request.setPhone("0912345678");
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+        when(userRepository.existsByPhoneAndIdNot("0912345678", userId)).thenReturn(true);
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> userService.updateUserByAdmin(userId, request));
+
+        assertEquals(ErrorCode.PHONE_ALREADY_EXISTS, exception.getErrorCode());
+        verify(userRepository, never()).save(user);
+    }
+
+    @Test
+    void updateUserByAdmin_missingUser_throws() {
+        UUID userId = UUID.randomUUID();
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.empty());
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> userService.updateUserByAdmin(userId, new AdminUpdateUserRequest()));
+
+        assertEquals(ErrorCode.USER_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void updateUserByAdmin_profileOnly_doesNotRevokeSessions() {
+        UUID userId = UUID.randomUUID();
+        User user = existingUser();
+        user.setId(userId);
+        AdminUpdateUserRequest request = new AdminUpdateUserRequest();
+        request.setFullName("Updated User");
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        userService.updateUserByAdmin(userId, request);
+
+        verify(accessTokenRevocationService, never()).invalidateAll(user);
+        verify(refreshTokenRepository, never()).revokeAllActiveByUser(user);
     }
 
     private User existingUser() {

@@ -1,5 +1,6 @@
 package com.tikzy.auth.controller;
 
+import com.tikzy.auth.dto.request.AdminUpdateUserRequest;
 import com.tikzy.auth.dto.request.UpdateProfileRequest;
 import com.tikzy.auth.dto.response.UserResponse;
 import com.tikzy.auth.service.UserService;
@@ -54,6 +55,20 @@ class UserControllerTest {
 
         assertEquals(response, actual);
         verify(userService).updateMyProfile("user@example.com", request);
+    }
+
+    @Test
+    void updateUser_forwardsUserIdAndRequest() {
+        UUID userId = UUID.randomUUID();
+        AdminUpdateUserRequest request = new AdminUpdateUserRequest();
+        request.setFullName("Updated User");
+        UserResponse response = userResponse();
+        when(userService.updateUserByAdmin(userId, request)).thenReturn(response);
+
+        UserResponse actual = userController.updateUser(userId, request).getData();
+
+        assertEquals(response, actual);
+        verify(userService).updateUserByAdmin(userId, request);
     }
 
     @Test
