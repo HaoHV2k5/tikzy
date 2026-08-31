@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -102,6 +103,40 @@ class AuthControllerTest {
 
         assertThrows(AppException.class, () -> authController.refresh(request, response));
 
+        String clearCookie = response.getHeader(HttpHeaders.SET_COOKIE);
+        assertNotNull(clearCookie);
+        assertTrue(clearCookie.contains("refresh_token="));
+        assertTrue(clearCookie.contains("Max-Age=0"));
+    }
+
+    @Test
+    void logout_revokesCurrentTokenAndClearsCookie() {
+        MockHttpServletRequest request = requestWithHeaders();
+        request.setCookies(new Cookie("refresh_token", "current-device-token"));
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer access-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        authController.logout(request, response);
+
+        verify(authService).logout("current-device-token", "access-token");
+        String clearCookie = response.getHeader(HttpHeaders.SET_COOKIE);
+        assertNotNull(clearCookie);
+        assertTrue(clearCookie.contains("refresh_token="));
+        assertTrue(clearCookie.contains("Max-Age=0"));
+    }
+
+    @Test
+    void logoutAll_forwardsAuthenticatedUserAndClearsCookie() {
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getName()).thenReturn("user@example.com");
+        MockHttpServletRequest request = requestWithHeaders();
+        request.setCookies(new Cookie("refresh_token", "current-device-token"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        authController.logoutAll(authentication, request, response);
+
+        verify(authService).logoutAll("user@example.com", "current-device-token");
         String clearCookie = response.getHeader(HttpHeaders.SET_COOKIE);
         assertNotNull(clearCookie);
         assertTrue(clearCookie.contains("refresh_token="));

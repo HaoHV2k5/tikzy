@@ -12,10 +12,11 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * Sinh và xác thực JWT access token (HS512).
- * Subject = email, claims bổ sung: userId, role.
+ * Subject = email, claims bổ sung: userId, role, jti và tokenVersion.
  */
 @Slf4j
 @Component
@@ -34,10 +35,13 @@ public class JwtTokenProvider {
     public String generateAccessToken(User user) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + accessTokenExpirationMs);
+        int tokenVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(user.getEmail())
                 .claim("userId", user.getId().toString())
                 .claim("role", user.getRole().getCode())
+                .claim("tokenVersion", tokenVersion)
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(key)

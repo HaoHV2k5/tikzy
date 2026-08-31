@@ -40,9 +40,11 @@ class JwtTokenProviderTest {
         assertTrue(provider.validateToken(token));
 
         Claims claims = provider.getClaims(token);
+        assertNotNull(claims.getId());
         assertEquals("test@example.com", claims.getSubject());
         assertEquals("ROLE_CUSTOMER", claims.get("role", String.class));
         assertNotNull(claims.get("userId", String.class));
+        assertEquals(0, claims.get("tokenVersion", Integer.class));
     }
 
     @Test
