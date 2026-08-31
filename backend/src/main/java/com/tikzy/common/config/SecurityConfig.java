@@ -25,14 +25,24 @@ import java.util.List;
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
-            "/api/v1/auth/**",
+            "/api/v1/auth/register",
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/logout",
+            "/api/v1/auth/logout-all",
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/v3/api-docs/**"
     };
 
+    private static final String[] ADMIN_ENDPOINTS = {"/api/v1/admin/**"};
+    private static final String[] ORGANIZER_ENDPOINTS = {"/api/v1/organizer/**"};
+    private static final String[] CUSTOMER_ENDPOINTS = {"/api/v1/customer/**"};
+    private static final String[] USER_ENDPOINTS = {"/api/v1/users/**"};
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -42,8 +52,14 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        .requestMatchers(ADMIN_ENDPOINTS).hasRole("ADMIN")
+                        .requestMatchers(ORGANIZER_ENDPOINTS).hasAnyRole("ORGANIZER", "ADMIN")
+                        .requestMatchers(CUSTOMER_ENDPOINTS).hasAnyRole("CUSTOMER", "ADMIN")
+                        .requestMatchers(USER_ENDPOINTS).hasAnyRole("CUSTOMER", "ORGANIZER", "ADMIN")
                         .anyRequest().authenticated())
-                .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthenticationEntryPoint))
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(restAuthenticationEntryPoint)
+                        .accessDeniedHandler(restAccessDeniedHandler))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
