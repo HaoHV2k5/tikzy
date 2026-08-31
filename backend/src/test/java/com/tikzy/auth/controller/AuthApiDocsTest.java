@@ -34,6 +34,7 @@ class AuthApiDocsTest {
                 .andExpect(jsonPath("$.paths['/api/v1/users/me']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/users/me'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/users/me'].patch").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/users/{userId}'].patch").exists())
                 .andExpect(jsonPath("$.info.title").value(containsString("Tikzy")));
     }
 }
