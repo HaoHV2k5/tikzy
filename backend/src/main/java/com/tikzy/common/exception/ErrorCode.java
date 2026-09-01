@@ -23,6 +23,8 @@ public enum ErrorCode {
     INVALID_EMAIL_REQUEST(1012, "Thông tin email không hợp lệ", HttpStatus.BAD_REQUEST),
     EMAIL_SERVICE_NOT_CONFIGURED(1013, "Dịch vụ email chưa được cấu hình", HttpStatus.INTERNAL_SERVER_ERROR),
     EMAIL_SEND_FAILED(1014, "Không thể gửi email", HttpStatus.BAD_GATEWAY),
+    EMAIL_TEMPLATE_NOT_FOUND(1015, "Không tìm thấy mẫu email", HttpStatus.NOT_FOUND),
+    EMAIL_TEMPLATE_VARIABLE_MISSING(1016, "Mẫu email thiếu dữ liệu bắt buộc", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // Event 2xxx
     EVENT_NOT_FOUND(2001, "Không tìm thấy sự kiện", HttpStatus.NOT_FOUND),

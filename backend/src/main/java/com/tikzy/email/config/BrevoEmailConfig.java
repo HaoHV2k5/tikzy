@@ -1,4 +1,4 @@
-package com.tikzy.common.email;
+package com.tikzy.email.config;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
