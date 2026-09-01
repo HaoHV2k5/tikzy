@@ -20,6 +20,9 @@ public enum ErrorCode {
     REFRESH_TOKEN_REUSED(1009, "Refresh token đã bị tái sử dụng, vui lòng đăng nhập lại", HttpStatus.UNAUTHORIZED),
     INVALID_USER_DATA(1010, "Thông tin người dùng không hợp lệ", HttpStatus.BAD_REQUEST),
     ROLE_NOT_FOUND(1011, "Vai trò không tồn tại", HttpStatus.BAD_REQUEST),
+    INVALID_EMAIL_REQUEST(1012, "Thông tin email không hợp lệ", HttpStatus.BAD_REQUEST),
+    EMAIL_SERVICE_NOT_CONFIGURED(1013, "Dịch vụ email chưa được cấu hình", HttpStatus.INTERNAL_SERVER_ERROR),
+    EMAIL_SEND_FAILED(1014, "Không thể gửi email", HttpStatus.BAD_GATEWAY),
 
     // Event 2xxx
     EVENT_NOT_FOUND(2001, "Không tìm thấy sự kiện", HttpStatus.NOT_FOUND),
