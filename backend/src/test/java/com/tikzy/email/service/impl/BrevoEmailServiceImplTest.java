@@ -1,7 +1,8 @@
-package com.tikzy.common.email;
+package com.tikzy.email.service.impl;
 
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
+import com.tikzy.email.config.BrevoProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -18,7 +19,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
-class BrevoEmailServiceTest {
+class BrevoEmailServiceImplTest {
 
     private static final String BREVO_URL = "https://api.brevo.com";
 
@@ -27,7 +28,7 @@ class BrevoEmailServiceTest {
         RestClient.Builder builder = RestClient.builder().baseUrl(BREVO_URL);
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
-        BrevoEmailService emailService = new BrevoEmailService(
+        BrevoEmailServiceImpl emailService = new BrevoEmailServiceImpl(
                 restClient,
                 new BrevoProperties("test-api-key", BREVO_URL, "no-reply@tikzy.test", "Tikzy"));
         server.expect(requestTo(BREVO_URL + "/v3/smtp/email"))
@@ -50,7 +51,7 @@ class BrevoEmailServiceTest {
     @Test
     void sendHtml_withoutBrevoConfiguration_throws() {
         RestClient restClient = RestClient.builder().baseUrl(BREVO_URL).build();
-        BrevoEmailService emailService = new BrevoEmailService(
+        BrevoEmailServiceImpl emailService = new BrevoEmailServiceImpl(
                 restClient,
                 new BrevoProperties("", BREVO_URL, "", "Tikzy"));
 
@@ -66,7 +67,7 @@ class BrevoEmailServiceTest {
         RestClient.Builder builder = RestClient.builder().baseUrl(BREVO_URL);
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
-        BrevoEmailService emailService = new BrevoEmailService(
+        BrevoEmailServiceImpl emailService = new BrevoEmailServiceImpl(
                 restClient,
                 new BrevoProperties("test-api-key", BREVO_URL, "no-reply@tikzy.test", "Tikzy"));
         server.expect(requestTo(BREVO_URL + "/v3/smtp/email"))

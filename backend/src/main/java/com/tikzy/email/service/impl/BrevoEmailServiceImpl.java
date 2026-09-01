@@ -1,8 +1,10 @@
-package com.tikzy.common.email;
+package com.tikzy.email.service.impl;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
+import com.tikzy.email.config.BrevoProperties;
+import com.tikzy.email.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -17,7 +19,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class BrevoEmailService implements EmailService {
+public class BrevoEmailServiceImpl implements EmailService {
 
     private static final String SEND_EMAIL_PATH = "/v3/smtp/email";
 
@@ -25,15 +27,24 @@ public class BrevoEmailService implements EmailService {
     private final BrevoProperties properties;
 
     @Override
-    public void sendHtml(String recipientEmail, String recipientName, String subject, String htmlContent) {
-        validateMessage(recipientEmail, subject, htmlContent);
+    public void send(
+            String recipientEmail,
+            String recipientName,
+            String subject,
+            String htmlContent,
+            String textContent) {
+        validateMessage(recipientEmail, subject, htmlContent, textContent);
         validateConfiguration();
+
+        String normalizedHtmlContent = StringUtils.hasText(htmlContent) ? htmlContent : null;
+        String normalizedTextContent = normalizedHtmlContent == null ? textContent : null;
 
         SendEmailRequest request = new SendEmailRequest(
                 new Sender(properties.senderName(), properties.senderEmail()),
                 List.of(new Recipient(recipientEmail.trim(), normalizeNullable(recipientName))),
                 subject.trim(),
-                htmlContent);
+                normalizedHtmlContent,
+                normalizedTextContent);
 
         try {
             brevoRestClient.post()
@@ -54,10 +65,14 @@ public class BrevoEmailService implements EmailService {
         }
     }
 
-    private void validateMessage(String recipientEmail, String subject, String htmlContent) {
+    private void validateMessage(
+            String recipientEmail,
+            String subject,
+            String htmlContent,
+            String textContent) {
         if (!StringUtils.hasText(recipientEmail)
                 || !StringUtils.hasText(subject)
-                || !StringUtils.hasText(htmlContent)) {
+                || (!StringUtils.hasText(htmlContent) && !StringUtils.hasText(textContent))) {
             throw new AppException(ErrorCode.INVALID_EMAIL_REQUEST);
         }
     }
@@ -81,7 +96,8 @@ public class BrevoEmailService implements EmailService {
             Sender sender,
             List<Recipient> to,
             String subject,
-            String htmlContent) {
+            String htmlContent,
+            String textContent) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
