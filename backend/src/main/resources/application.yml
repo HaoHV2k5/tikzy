@@ -58,6 +58,13 @@ jwt:
   refresh-token-cookie-secure: ${JWT_REFRESH_COOKIE_SECURE:false} # true khi chạy HTTPS
   refresh-token-cookie-same-site: ${JWT_REFRESH_COOKIE_SAME_SITE:Lax}
 
+# ===== Brevo transactional email =====
+brevo:
+  api-key: ${BREVO_API_KEY:}
+  api-url: ${BREVO_API_URL:https://api.brevo.com}
+  sender-email: ${BREVO_SENDER_EMAIL:}
+  sender-name: ${BREVO_SENDER_NAME:Tikzy}
+
 # ===== Cloudinary =====
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME}
