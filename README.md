@@ -41,6 +41,14 @@ Nền tảng bán vé sự kiện trực tuyến theo mô hình **Marketplace**,
 - **Banner**: slider trang chủ, banner danh mục, lên lịch hiển thị + ưu tiên.
 - **Auth & Session**: JWT (Access 15-30p) + Refresh Token (lưu DB), Logout thu hồi, Refresh Token Rotation.
 
+### Chính sách khóa tài khoản
+
+- Admin cấu hình số lần đăng nhập sai tối đa qua `GET/PATCH /api/v1/admin/security-policy` với trường `maxFailedLoginAttempts` (mặc định `5`).
+- Mỗi lần nhập sai mật khẩu làm tăng bộ đếm. Khi đạt ngưỡng, tài khoản bị khóa, toàn bộ session bị thu hồi và access token cũ không còn hợp lệ. Đăng nhập thành công sẽ reset bộ đếm.
+- Người dùng gửi email qua `POST /api/v1/auth/account-unlock/request`. Hệ thống chỉ gửi OTP đến email của tài khoản đang bị khóa và luôn trả thông báo chung để tránh lộ thông tin tài khoản.
+- Người dùng gửi email và OTP qua `POST /api/v1/auth/account-unlock/verify-otp`. Chỉ OTP hợp lệ mới nhận được reset token dùng một lần.
+- Người dùng gửi reset token, `newPassword` và `confirmPassword` qua `POST /api/v1/auth/account-unlock/reset-password`. Thành công mới mở khóa tài khoản, reset bộ đếm và thu hồi session cũ.
+
 ## Quản trị rủi ro traffic cao
 
 | Rủi ro | Giải pháp |
@@ -56,7 +64,7 @@ Nền tảng bán vé sự kiện trực tuyến theo mô hình **Marketplace**,
 
 Toàn bộ bảng dùng **UUID** làm khóa chính (`gen_random_uuid()`) — tránh lộ thông tin kinh doanh, dễ scale đa vùng, tương thích Hibernate 6+.
 
-Các bảng chính: `roles`, `users`, `refresh_tokens`, `categories`, `events`, `show_times`, `ticket_types`, `show_time_ticket_inventories`, `tickets`, `promotions`, `user_promotions`, `promotion_usages`, `orders`, `order_items`, `payments`, `refund_logs`, `event_broadcasts`, `settlements`, `check_ins`, `ad_packages`, `ad_campaigns`, `banners`.
+Các bảng chính: `roles`, `users`, `refresh_tokens`, `security_policies`, `account_unlock_requests`, `categories`, `events`, `show_times`, `ticket_types`, `show_time_ticket_inventories`, `tickets`, `promotions`, `user_promotions`, `promotion_usages`, `orders`, `order_items`, `payments`, `refund_logs`, `event_broadcasts`, `settlements`, `check_ins`, `ad_packages`, `ad_campaigns`, `banners`.
 
 ---
 

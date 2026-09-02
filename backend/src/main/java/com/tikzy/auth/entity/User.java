@@ -13,6 +13,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
 @Builder
@@ -48,4 +50,15 @@ public class User extends BaseEntity {
     @Builder.Default
     @Column(name = "token_version", nullable = false)
     private Integer tokenVersion = 0;
+
+    @Builder.Default
+    @Column(name = "failed_login_attempts", nullable = false)
+    private Integer failedLoginAttempts = 0;
+
+    @Builder.Default
+    @Column(name = "is_locked", nullable = false)
+    private Boolean isLocked = false;
+
+    @Column(name = "locked_at")
+    private LocalDateTime lockedAt;
 }

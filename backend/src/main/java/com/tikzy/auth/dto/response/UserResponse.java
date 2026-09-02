@@ -17,5 +17,6 @@ public class UserResponse {
     private String avatarUrl;
     private String role;
     private Boolean isActive;
+    private Boolean isLocked;
     private LocalDateTime createdAt;
 }
