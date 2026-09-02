@@ -73,6 +73,8 @@ class AuthServiceTest {
                 jwtTokenProvider,
                 accessTokenRevocationService,
                 userMapper,
+                null,
+                null,
                 2_592_000_000L);
         customerRole = Role.builder().code("ROLE_CUSTOMER").name("Khách hàng").build();
         customerRole.setId(UUID.randomUUID());
