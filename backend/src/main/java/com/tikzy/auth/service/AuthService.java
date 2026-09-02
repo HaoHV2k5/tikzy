@@ -14,9 +14,9 @@ import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.common.config.JwtTokenProvider;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
+import com.tikzy.email.service.EmailTemplateService;
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 @Slf4j
@@ -46,10 +47,10 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final AccessTokenRevocationService accessTokenRevocationService;
     private final UserMapper userMapper;
+    private final EmailTemplateService emailTemplateService;
     private final SecurityPolicyService securityPolicyService;
     private final long refreshTokenExpirationMs;
 
-    @Autowired
     public AuthService(
             UserRepository userRepository,
             RoleRepository roleRepository,
@@ -58,6 +59,7 @@ public class AuthService {
             JwtTokenProvider jwtTokenProvider,
             AccessTokenRevocationService accessTokenRevocationService,
             UserMapper userMapper,
+            EmailTemplateService emailTemplateService,
             SecurityPolicyService securityPolicyService,
             @Value("${jwt.refresh-token-expiration-ms}") long refreshTokenExpirationMs) {
         this.userRepository = userRepository;
@@ -67,32 +69,9 @@ public class AuthService {
         this.jwtTokenProvider = jwtTokenProvider;
         this.accessTokenRevocationService = accessTokenRevocationService;
         this.userMapper = userMapper;
+        this.emailTemplateService = emailTemplateService;
         this.securityPolicyService = securityPolicyService;
         this.refreshTokenExpirationMs = refreshTokenExpirationMs;
-    }
-
-    /**
-     * Giữ constructor cũ cho các consumer tạo service thủ công; production luôn dùng policy từ DB.
-     */
-    public AuthService(
-            UserRepository userRepository,
-            RoleRepository roleRepository,
-            RefreshTokenRepository refreshTokenRepository,
-            PasswordEncoder passwordEncoder,
-            JwtTokenProvider jwtTokenProvider,
-            AccessTokenRevocationService accessTokenRevocationService,
-            UserMapper userMapper,
-            long refreshTokenExpirationMs) {
-        this(
-                userRepository,
-                roleRepository,
-                refreshTokenRepository,
-                passwordEncoder,
-                jwtTokenProvider,
-                accessTokenRevocationService,
-                userMapper,
-                null,
-                refreshTokenExpirationMs);
     }
 
     @Transactional
@@ -120,8 +99,27 @@ public class AuthService {
                 .build();
 
         User saved = userRepository.saveAndFlush(user);
+        sendAccountCreatedEmail(saved);
         log.info("Đăng ký tài khoản mới: {}", saved.getEmail());
         return userMapper.toUserResponse(saved);
+    }
+
+    private void sendAccountCreatedEmail(User user) {
+        if (emailTemplateService == null) {
+            return;
+        }
+
+        try {
+            emailTemplateService.sendTemplate(
+                    "ACCOUNT_CREATED",
+                    user.getEmail(),
+                    user.getFullName(),
+                    Map.of(
+                            "fullName", user.getFullName(),
+                            "email", user.getEmail()));
+        } catch (RuntimeException ex) {
+            log.warn("Không thể gửi email chúc mừng đăng ký cho {}: {}", user.getEmail(), ex.getMessage());
+        }
     }
 
     @Transactional(noRollbackFor = AppException.class)
