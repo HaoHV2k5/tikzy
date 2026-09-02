@@ -25,6 +25,11 @@ public enum ErrorCode {
     EMAIL_SEND_FAILED(1014, "Không thể gửi email", HttpStatus.BAD_GATEWAY),
     EMAIL_TEMPLATE_NOT_FOUND(1015, "Không tìm thấy mẫu email", HttpStatus.NOT_FOUND),
     EMAIL_TEMPLATE_VARIABLE_MISSING(1016, "Mẫu email thiếu dữ liệu bắt buộc", HttpStatus.INTERNAL_SERVER_ERROR),
+    ACCOUNT_LOCKED(1017, "Tài khoản đã bị khóa do đăng nhập sai quá số lần cho phép", HttpStatus.LOCKED),
+    INVALID_ACCOUNT_UNLOCK_OTP(1018, "Mã OTP không đúng hoặc đã bị vô hiệu hóa", HttpStatus.BAD_REQUEST),
+    ACCOUNT_UNLOCK_OTP_EXPIRED(1019, "Mã OTP đã hết hạn", HttpStatus.BAD_REQUEST),
+    INVALID_PASSWORD_RESET_TOKEN(1020, "Phiên khôi phục tài khoản không hợp lệ hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
+    PASSWORD_CONFIRMATION_MISMATCH(1021, "Mật khẩu xác nhận không khớp", HttpStatus.BAD_REQUEST),
 
     // Event 2xxx
     EVENT_NOT_FOUND(2001, "Không tìm thấy sự kiện", HttpStatus.NOT_FOUND),

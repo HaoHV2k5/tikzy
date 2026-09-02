@@ -16,6 +16,7 @@ import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Locale;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -34,6 +36,7 @@ public class AuthService {
 
     private static final String DEFAULT_ROLE_CODE = "ROLE_CUSTOMER";
     private static final int REFRESH_TOKEN_BYTES = 64;
+    private static final int DEFAULT_MAX_FAILED_LOGIN_ATTEMPTS = 5;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
@@ -43,8 +46,10 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final AccessTokenRevocationService accessTokenRevocationService;
     private final UserMapper userMapper;
+    private final SecurityPolicyService securityPolicyService;
     private final long refreshTokenExpirationMs;
 
+    @Autowired
     public AuthService(
             UserRepository userRepository,
             RoleRepository roleRepository,
@@ -53,6 +58,7 @@ public class AuthService {
             JwtTokenProvider jwtTokenProvider,
             AccessTokenRevocationService accessTokenRevocationService,
             UserMapper userMapper,
+            SecurityPolicyService securityPolicyService,
             @Value("${jwt.refresh-token-expiration-ms}") long refreshTokenExpirationMs) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -61,7 +67,32 @@ public class AuthService {
         this.jwtTokenProvider = jwtTokenProvider;
         this.accessTokenRevocationService = accessTokenRevocationService;
         this.userMapper = userMapper;
+        this.securityPolicyService = securityPolicyService;
         this.refreshTokenExpirationMs = refreshTokenExpirationMs;
+    }
+
+    /**
+     * Giữ constructor cũ cho các consumer tạo service thủ công; production luôn dùng policy từ DB.
+     */
+    public AuthService(
+            UserRepository userRepository,
+            RoleRepository roleRepository,
+            RefreshTokenRepository refreshTokenRepository,
+            PasswordEncoder passwordEncoder,
+            JwtTokenProvider jwtTokenProvider,
+            AccessTokenRevocationService accessTokenRevocationService,
+            UserMapper userMapper,
+            long refreshTokenExpirationMs) {
+        this(
+                userRepository,
+                roleRepository,
+                refreshTokenRepository,
+                passwordEncoder,
+                jwtTokenProvider,
+                accessTokenRevocationService,
+                userMapper,
+                null,
+                refreshTokenExpirationMs);
     }
 
     @Transactional
@@ -93,21 +124,35 @@ public class AuthService {
         return userMapper.toUserResponse(saved);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = AppException.class)
     public AuthResponse login(LoginRequest request) {
         return login(request, null, null);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = AppException.class)
     public AuthResponse login(LoginRequest request, String deviceInfo, String ipAddress) {
-        User user = userRepository.findByEmail(normalizeEmail(request.getEmail()))
+        User user = findUserForLogin(normalizeEmail(request.getEmail()))
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_CREDENTIALS));
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
-        }
         if (Boolean.FALSE.equals(user.getIsActive())) {
             throw new AppException(ErrorCode.ACCOUNT_DISABLED);
+        }
+        if (Boolean.TRUE.equals(user.getIsLocked())) {
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED);
+        }
+
+        int maxFailedAttempts = getMaxFailedLoginAttempts();
+        if (failedLoginAttempts(user) >= maxFailedAttempts) {
+            lockAccount(user, LocalDateTime.now());
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED);
+        }
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            registerFailedLogin(user, maxFailedAttempts);
+        }
+
+        if (failedLoginAttempts(user) > 0) {
+            user.setFailedLoginAttempts(0);
         }
 
         String accessToken = jwtTokenProvider.generateAccessToken(user);
@@ -128,6 +173,41 @@ public class AuthService {
                 .user(userMapper.toUserResponse(user))
                 .refreshToken(refreshTokenValue)
                 .build();
+    }
+
+    private Optional<User> findUserForLogin(String email) {
+        return userRepository.findByEmailForUpdate(email)
+                .or(() -> userRepository.findByEmail(email));
+    }
+
+    private int getMaxFailedLoginAttempts() {
+        if (securityPolicyService == null) {
+            return DEFAULT_MAX_FAILED_LOGIN_ATTEMPTS;
+        }
+        return Math.max(1, securityPolicyService.getMaxFailedLoginAttempts());
+    }
+
+    private int failedLoginAttempts(User user) {
+        return user.getFailedLoginAttempts() == null ? 0 : Math.max(0, user.getFailedLoginAttempts());
+    }
+
+    private void registerFailedLogin(User user, int maxFailedAttempts) {
+        int failedAttempts = failedLoginAttempts(user) + 1;
+        user.setFailedLoginAttempts(failedAttempts);
+
+        if (failedAttempts >= maxFailedAttempts) {
+            lockAccount(user, LocalDateTime.now());
+            log.warn("Tài khoản bị khóa do đăng nhập sai: {}", user.getEmail());
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED);
+        }
+
+        throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    private void lockAccount(User user, LocalDateTime lockedAt) {
+        user.setIsLocked(true);
+        user.setLockedAt(lockedAt);
+        revokeAllSessions(user);
     }
 
     /**
@@ -159,6 +239,10 @@ public class AuthService {
         if (Boolean.FALSE.equals(user.getIsActive())) {
             revokeAllSessions(user);
             throw new AppException(ErrorCode.ACCOUNT_DISABLED);
+        }
+        if (Boolean.TRUE.equals(user.getIsLocked())) {
+            revokeAllSessions(user);
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED);
         }
 
         currentToken.setIsRevoked(true);

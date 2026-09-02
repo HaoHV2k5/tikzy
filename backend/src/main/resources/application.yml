@@ -65,6 +65,16 @@ brevo:
   sender-email: ${BREVO_SENDER_EMAIL:}
   sender-name: ${BREVO_SENDER_NAME:Tikzy}
 
+# ===== Authentication security policy =====
+# The persisted value in security_policies is the source of truth after migration.
+security:
+  login:
+    max-failed-attempts: ${SECURITY_MAX_FAILED_LOGIN_ATTEMPTS:5}
+  account-unlock:
+    otp-expiration-minutes: ${ACCOUNT_UNLOCK_OTP_EXPIRATION_MINUTES:10}
+    reset-token-expiration-minutes: ${ACCOUNT_UNLOCK_RESET_TOKEN_EXPIRATION_MINUTES:10}
+    max-otp-attempts: ${ACCOUNT_UNLOCK_MAX_OTP_ATTEMPTS:5}
+
 # ===== Cloudinary =====
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME}
