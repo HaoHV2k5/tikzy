@@ -2,12 +2,55 @@
 
 Nền tảng bán vé sự kiện trực tuyến theo mô hình **Marketplace**, kết nối **Nhà tổ chức sự kiện (BTC)** với **Người mua vé**.
 
+## Tech Stack
+
+Các công nghệ chính đang được sử dụng trong hệ thống:
+
+### Application
+
+<p align="center">
+  <a href="https://www.java.com/"><img src="https://img.shields.io/badge/Java_21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java 21"></a>
+  <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring_Boot_3.5-6DB33F?style=for-the-badge&logo=springboot&logoColor=white" alt="Spring Boot 3.5"></a>
+  <a href="https://spring.io/projects/spring-security"><img src="https://img.shields.io/badge/Spring_Security-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white" alt="Spring Security"></a>
+  <a href="https://maven.apache.org/"><img src="https://img.shields.io/badge/Maven-C71A36?style=for-the-badge&logo=apachemaven&logoColor=white" alt="Apache Maven"></a>
+  <a href="https://mapstruct.org/"><img src="https://img.shields.io/badge/MapStruct_1.6.3-4B5563?style=for-the-badge" alt="MapStruct 1.6.3"></a>
+</p>
+
+### Frontend
+
+<p align="center">
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React 18"></a>
+  <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite"></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"></a>
+</p>
+
+### Data & Infrastructure
+
+<p align="center">
+  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"></a>
+  <a href="https://supabase.com/"><img src="https://img.shields.io/badge/Supabase-3FCF8E?style=for-the-badge&logo=supabase&logoColor=0F172A" alt="Supabase"></a>
+  <a href="https://redis.io/"><img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"></a>
+  <a href="https://documentation.red-gate.com/flyway"><img src="https://img.shields.io/badge/Flyway-CC0200?style=for-the-badge&logo=flyway&logoColor=white" alt="Flyway"></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"></a>
+</p>
+
+### Security & Integrations
+
+<p align="center">
+  <a href="https://jwt.io/"><img src="https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white" alt="JSON Web Token"></a>
+  <a href="https://cloudinary.com/"><img src="https://img.shields.io/badge/Cloudinary-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white" alt="Cloudinary"></a>
+  <a href="https://github.com/zxing/zxing"><img src="https://img.shields.io/badge/ZXing-QR_Code-2F80ED?style=for-the-badge" alt="ZXing QR Code"></a>
+  <a href="https://www.brevo.com/"><img src="https://img.shields.io/badge/Brevo-0B996E?style=for-the-badge&logo=brevo&logoColor=white" alt="Brevo Transactional Email"></a>
+</p>
+
+> Repository hiện tại tập trung vào backend Spring Boot trong thư mục `backend/`; các badge frontend phản ánh kiến trúc SPA được sử dụng cho Tikzy.
+
 ## Tổng quan kỹ thuật
 
 | Hạng mục | Quyết định |
 |----------|-----------|
 | Kiến trúc | Modular Monolith (1 Spring Boot app) |
-| Backend | Java 17+ / Spring Boot 3.x |
+| Backend | Java 21 / Spring Boot 3.5.5 |
 | Frontend | React 18 + Vite + TypeScript (SPA) |
 | Database | Supabase (managed PostgreSQL) — PgBouncer port 6543 |
 | Cache / Lock | Redis (cache, session, distributed lock chống oversell) |
