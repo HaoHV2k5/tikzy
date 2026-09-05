@@ -1,9 +1,9 @@
 package com.tikzy.auth.service;
 
-import com.tikzy.auth.dto.request.ResetAccountPasswordRequest;
-import com.tikzy.auth.dto.request.UnlockAccountRequest;
-import com.tikzy.auth.dto.request.VerifyAccountUnlockOtpRequest;
-import com.tikzy.auth.dto.response.AccountUnlockVerificationResponse;
+import com.tikzy.auth.dto.request.ForgotPasswordRequest;
+import com.tikzy.auth.dto.request.ResetPasswordRequest;
+import com.tikzy.auth.dto.request.VerifyPasswordResetOtpRequest;
+import com.tikzy.auth.dto.response.PasswordResetVerificationResponse;
 import com.tikzy.auth.entity.AccountUnlockRequest;
 import com.tikzy.auth.entity.User;
 import com.tikzy.auth.enums.AccountRecoveryType;
@@ -34,10 +34,10 @@ import java.util.Objects;
 
 @Slf4j
 @Service
-public class AccountUnlockService {
+public class PasswordResetService {
 
-    private static final String ACCOUNT_UNLOCK_OTP_TEMPLATE = "ACCOUNT_UNLOCK_OTP";
-    private static final AccountRecoveryType ACCOUNT_UNLOCK = AccountRecoveryType.ACCOUNT_UNLOCK;
+    private static final String PASSWORD_RESET_OTP_TEMPLATE = "PASSWORD_RESET_OTP";
+    private static final AccountRecoveryType PASSWORD_RESET = AccountRecoveryType.PASSWORD_RESET;
     private static final int RESET_TOKEN_BYTES = 32;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -51,7 +51,7 @@ public class AccountUnlockService {
     private final long resetTokenExpirationMinutes;
     private final int maxOtpAttempts;
 
-    public AccountUnlockService(
+    public PasswordResetService(
             UserRepository userRepository,
             AccountUnlockRequestRepository accountUnlockRequestRepository,
             RefreshTokenRepository refreshTokenRepository,
@@ -73,138 +73,144 @@ public class AccountUnlockService {
     }
 
     @Transactional
-    public void requestUnlock(UnlockAccountRequest request) {
+    public void requestReset(ForgotPasswordRequest request) {
         String email = normalizeEmail(request.getEmail());
         User user = userRepository.findByEmailForUpdate(email).orElse(null);
 
-        // Keep this response indistinguishable for unknown, active, and admin-disabled accounts.
+        // Keep the response identical for unknown, locked, and disabled accounts.
         if (user == null
                 || !Boolean.TRUE.equals(user.getIsActive())
-                || !Boolean.TRUE.equals(user.getIsLocked())) {
+                || Boolean.TRUE.equals(user.getIsLocked())) {
             return;
         }
 
         LocalDateTime now = LocalDateTime.now();
-        accountUnlockRequestRepository.consumeActiveByUserAndRequestType(user, ACCOUNT_UNLOCK, now);
+        accountUnlockRequestRepository.consumeActiveByUserAndRequestType(user, PASSWORD_RESET, now);
 
         String otp = generateOtp();
-        AccountUnlockRequest unlockRequest = AccountUnlockRequest.builder()
+        AccountUnlockRequest resetRequest = AccountUnlockRequest.builder()
                 .user(user)
-                .requestType(ACCOUNT_UNLOCK)
+                .requestType(PASSWORD_RESET)
                 .otpHash(passwordEncoder.encode(otp))
                 .otpAttempts(0)
                 .otpExpiresAt(now.plusMinutes(otpExpirationMinutes))
                 .build();
-        accountUnlockRequestRepository.save(unlockRequest);
+        accountUnlockRequestRepository.save(resetRequest);
 
-        emailTemplateService.sendTemplate(
-                ACCOUNT_UNLOCK_OTP_TEMPLATE,
-                user.getEmail(),
-                user.getFullName(),
-                Map.of(
-                        "fullName", user.getFullName(),
-                        "email", user.getEmail(),
-                        "otp", otp,
-                        "expiresInMinutes", otpExpirationMinutes));
+        try {
+            emailTemplateService.sendTemplate(
+                    PASSWORD_RESET_OTP_TEMPLATE,
+                    user.getEmail(),
+                    user.getFullName(),
+                    Map.of(
+                            "fullName", user.getFullName(),
+                            "email", user.getEmail(),
+                            "otp", otp,
+                            "expiresInMinutes", otpExpirationMinutes));
+        } catch (RuntimeException ex) {
+            // Do not reveal whether an email belongs to a user when email delivery fails.
+            log.warn("Không thể gửi OTP đặt lại mật khẩu cho {}: {}", user.getEmail(), ex.getMessage());
+        }
 
-        log.info("Đã gửi OTP yêu cầu mở khóa tài khoản: {}", user.getEmail());
+        log.info("Đã tạo yêu cầu OTP đặt lại mật khẩu: {}", user.getEmail());
     }
 
     @Transactional(noRollbackFor = AppException.class)
-    public AccountUnlockVerificationResponse verifyOtp(VerifyAccountUnlockOtpRequest request) {
-        User user = findLockedUser(request.getEmail());
-        AccountUnlockRequest unlockRequest = accountUnlockRequestRepository
+    public PasswordResetVerificationResponse verifyOtp(VerifyPasswordResetOtpRequest request) {
+        User user = findActiveUser(request.getEmail());
+        AccountUnlockRequest resetRequest = accountUnlockRequestRepository
                 .findFirstByUserAndRequestTypeAndConsumedAtIsNullAndOtpVerifiedAtIsNullOrderByCreatedAtDesc(
-                        user, ACCOUNT_UNLOCK)
-                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACCOUNT_UNLOCK_OTP));
+                        user, PASSWORD_RESET)
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_PASSWORD_RESET_OTP));
 
         LocalDateTime now = LocalDateTime.now();
-        if (unlockRequest.getOtpExpiresAt() == null
-                || !unlockRequest.getOtpExpiresAt().isAfter(now)) {
-            unlockRequest.setConsumedAt(now);
-            throw new AppException(ErrorCode.ACCOUNT_UNLOCK_OTP_EXPIRED);
+        if (resetRequest.getOtpExpiresAt() == null
+                || !resetRequest.getOtpExpiresAt().isAfter(now)) {
+            resetRequest.setConsumedAt(now);
+            throw new AppException(ErrorCode.PASSWORD_RESET_OTP_EXPIRED);
         }
 
-        int attempts = otpAttempts(unlockRequest);
+        int attempts = otpAttempts(resetRequest);
         if (attempts >= maxOtpAttempts) {
-            unlockRequest.setConsumedAt(now);
-            throw new AppException(ErrorCode.INVALID_ACCOUNT_UNLOCK_OTP);
+            resetRequest.setConsumedAt(now);
+            throw new AppException(ErrorCode.INVALID_PASSWORD_RESET_OTP);
         }
 
-        if (!passwordEncoder.matches(request.getOtp(), unlockRequest.getOtpHash())) {
+        if (!passwordEncoder.matches(request.getOtp(), resetRequest.getOtpHash())) {
             attempts++;
-            unlockRequest.setOtpAttempts(attempts);
+            resetRequest.setOtpAttempts(attempts);
             if (attempts >= maxOtpAttempts) {
-                unlockRequest.setConsumedAt(now);
+                resetRequest.setConsumedAt(now);
             }
-            throw new AppException(ErrorCode.INVALID_ACCOUNT_UNLOCK_OTP);
+            throw new AppException(ErrorCode.INVALID_PASSWORD_RESET_OTP);
         }
 
         String resetToken = generateResetToken();
-        unlockRequest.setOtpVerifiedAt(now);
-        unlockRequest.setResetTokenHash(hashToken(resetToken));
-        unlockRequest.setResetTokenExpiresAt(now.plusMinutes(resetTokenExpirationMinutes));
-        accountUnlockRequestRepository.save(unlockRequest);
+        resetRequest.setOtpVerifiedAt(now);
+        resetRequest.setResetTokenHash(hashToken(resetToken));
+        resetRequest.setResetTokenExpiresAt(now.plusMinutes(resetTokenExpirationMinutes));
+        accountUnlockRequestRepository.save(resetRequest);
 
-        return new AccountUnlockVerificationResponse(
+        return new PasswordResetVerificationResponse(
                 resetToken,
                 Duration.ofMinutes(resetTokenExpirationMinutes).getSeconds());
     }
 
     @Transactional
-    public void resetPassword(ResetAccountPasswordRequest request) {
+    public void resetPassword(ResetPasswordRequest request) {
         if (!Objects.equals(request.getNewPassword(), request.getConfirmPassword())) {
             throw new AppException(ErrorCode.PASSWORD_CONFIRMATION_MISMATCH);
+        }
+        if (!StringUtils.hasText(request.getResetToken())) {
+            throw new AppException(ErrorCode.INVALID_PASSWORD_RESET_TOKEN);
         }
 
         String resetToken = request.getResetToken().trim();
         String resetTokenHash = hashToken(resetToken);
         AccountUnlockRequest tokenRequest = accountUnlockRequestRepository
-                .findByResetTokenHashAndRequestType(resetTokenHash, ACCOUNT_UNLOCK)
+                .findByResetTokenHashAndRequestType(resetTokenHash, PASSWORD_RESET)
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_PASSWORD_RESET_TOKEN));
 
         User user = userRepository.findByIdForUpdate(tokenRequest.getUser().getId())
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_PASSWORD_RESET_TOKEN));
-        AccountUnlockRequest unlockRequest = accountUnlockRequestRepository
-                .findByResetTokenHashAndRequestTypeForUpdate(resetTokenHash, ACCOUNT_UNLOCK)
+        AccountUnlockRequest resetRequest = accountUnlockRequestRepository
+                .findByResetTokenHashAndRequestTypeForUpdate(resetTokenHash, PASSWORD_RESET)
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_PASSWORD_RESET_TOKEN));
 
         LocalDateTime now = LocalDateTime.now();
-        if (unlockRequest.getConsumedAt() != null
-                || unlockRequest.getOtpVerifiedAt() == null
-                || unlockRequest.getResetTokenExpiresAt() == null
-                || !unlockRequest.getResetTokenExpiresAt().isAfter(now)
+        if (resetRequest.getConsumedAt() != null
+                || resetRequest.getOtpVerifiedAt() == null
+                || resetRequest.getResetTokenExpiresAt() == null
+                || !resetRequest.getResetTokenExpiresAt().isAfter(now)
                 || !Boolean.TRUE.equals(user.getIsActive())
-                || !Boolean.TRUE.equals(user.getIsLocked())) {
+                || Boolean.TRUE.equals(user.getIsLocked())) {
             throw new AppException(ErrorCode.INVALID_PASSWORD_RESET_TOKEN);
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         user.setFailedLoginAttempts(0);
-        user.setIsLocked(false);
-        user.setLockedAt(null);
         accessTokenRevocationService.invalidateAll(user);
         refreshTokenRepository.revokeAllActiveByUser(user);
 
-        unlockRequest.setConsumedAt(now);
+        resetRequest.setConsumedAt(now);
         userRepository.save(user);
-        accountUnlockRequestRepository.save(unlockRequest);
-        log.info("Đã mở khóa và đặt lại mật khẩu tài khoản: {}", user.getEmail());
+        accountUnlockRequestRepository.save(resetRequest);
+        log.info("Đã đặt lại mật khẩu tài khoản: {}", user.getEmail());
     }
 
-    private User findLockedUser(String email) {
+    private User findActiveUser(String email) {
         User user = userRepository.findByEmailForUpdate(normalizeEmail(email))
-                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACCOUNT_UNLOCK_OTP));
-        if (!Boolean.TRUE.equals(user.getIsActive()) || !Boolean.TRUE.equals(user.getIsLocked())) {
-            throw new AppException(ErrorCode.INVALID_ACCOUNT_UNLOCK_OTP);
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_PASSWORD_RESET_OTP));
+        if (!Boolean.TRUE.equals(user.getIsActive()) || Boolean.TRUE.equals(user.getIsLocked())) {
+            throw new AppException(ErrorCode.INVALID_PASSWORD_RESET_OTP);
         }
         return user;
     }
 
-    private int otpAttempts(AccountUnlockRequest unlockRequest) {
-        return unlockRequest.getOtpAttempts() == null
+    private int otpAttempts(AccountUnlockRequest resetRequest) {
+        return resetRequest.getOtpAttempts() == null
                 ? 0
-                : Math.max(0, unlockRequest.getOtpAttempts());
+                : Math.max(0, resetRequest.getOtpAttempts());
     }
 
     private String generateOtp() {
@@ -229,7 +235,7 @@ public class AccountUnlockService {
 
     private String normalizeEmail(String email) {
         if (!StringUtils.hasText(email)) {
-            throw new AppException(ErrorCode.INVALID_ACCOUNT_UNLOCK_OTP);
+            throw new AppException(ErrorCode.INVALID_PASSWORD_RESET_OTP);
         }
         return email.trim().toLowerCase(Locale.ROOT);
     }

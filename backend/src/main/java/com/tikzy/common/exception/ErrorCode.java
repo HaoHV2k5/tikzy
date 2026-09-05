@@ -30,6 +30,8 @@ public enum ErrorCode {
     ACCOUNT_UNLOCK_OTP_EXPIRED(1019, "Mã OTP đã hết hạn", HttpStatus.BAD_REQUEST),
     INVALID_PASSWORD_RESET_TOKEN(1020, "Phiên khôi phục tài khoản không hợp lệ hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
     PASSWORD_CONFIRMATION_MISMATCH(1021, "Mật khẩu xác nhận không khớp", HttpStatus.BAD_REQUEST),
+    INVALID_PASSWORD_RESET_OTP(1022, "Mã OTP đặt lại mật khẩu không đúng hoặc đã bị vô hiệu hóa", HttpStatus.BAD_REQUEST),
+    PASSWORD_RESET_OTP_EXPIRED(1023, "Mã OTP đặt lại mật khẩu đã hết hạn", HttpStatus.BAD_REQUEST),
 
     // Event 2xxx
     EVENT_NOT_FOUND(2001, "Không tìm thấy sự kiện", HttpStatus.NOT_FOUND),

@@ -1,8 +1,11 @@
 package com.tikzy.auth.entity;
 
+import com.tikzy.auth.enums.AccountRecoveryType;
 import com.tikzy.common.entity.BaseAuditEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -30,6 +33,11 @@ public class AccountUnlockRequest extends BaseAuditEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "request_type", nullable = false, length = 30)
+    private AccountRecoveryType requestType = AccountRecoveryType.ACCOUNT_UNLOCK;
 
     @Column(name = "otp_hash", nullable = false, length = 255)
     private String otpHash;
