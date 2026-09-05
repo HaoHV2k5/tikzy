@@ -1,5 +1,6 @@
 package com.tikzy.auth.repository;
 
+import com.tikzy.auth.enums.AccountRecoveryType;
 import com.tikzy.auth.entity.AccountUnlockRequest;
 import com.tikzy.auth.entity.User;
 import jakarta.persistence.LockModeType;
@@ -18,20 +19,26 @@ import java.util.UUID;
 public interface AccountUnlockRequestRepository extends JpaRepository<AccountUnlockRequest, UUID> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<AccountUnlockRequest> findFirstByUserAndConsumedAtIsNullAndOtpVerifiedAtIsNullOrderByCreatedAtDesc(
-            User user);
+    Optional<AccountUnlockRequest> findFirstByUserAndRequestTypeAndConsumedAtIsNullAndOtpVerifiedAtIsNullOrderByCreatedAtDesc(
+            User user,
+            AccountRecoveryType requestType);
 
-    Optional<AccountUnlockRequest> findByResetTokenHash(String resetTokenHash);
+    Optional<AccountUnlockRequest> findByResetTokenHashAndRequestType(
+            String resetTokenHash,
+            AccountRecoveryType requestType);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT r FROM AccountUnlockRequest r WHERE r.resetTokenHash = :resetTokenHash")
-    Optional<AccountUnlockRequest> findByResetTokenHashForUpdate(
-            @Param("resetTokenHash") String resetTokenHash);
+    @Query("SELECT r FROM AccountUnlockRequest r "
+            + "WHERE r.resetTokenHash = :resetTokenHash AND r.requestType = :requestType")
+    Optional<AccountUnlockRequest> findByResetTokenHashAndRequestTypeForUpdate(
+            @Param("resetTokenHash") String resetTokenHash,
+            @Param("requestType") AccountRecoveryType requestType);
 
     @Modifying
     @Query("UPDATE AccountUnlockRequest r SET r.consumedAt = :consumedAt "
-            + "WHERE r.user = :user AND r.consumedAt IS NULL")
-    int consumeActiveByUser(
+            + "WHERE r.user = :user AND r.requestType = :requestType AND r.consumedAt IS NULL")
+    int consumeActiveByUserAndRequestType(
             @Param("user") User user,
+            @Param("requestType") AccountRecoveryType requestType,
             @Param("consumedAt") LocalDateTime consumedAt);
 }

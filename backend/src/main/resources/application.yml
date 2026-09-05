@@ -65,7 +65,7 @@ brevo:
   sender-email: ${BREVO_SENDER_EMAIL:}
   sender-name: ${BREVO_SENDER_NAME:Tikzy}
 
-# ===== Authentication security policy =====
+# ===== Authentication recovery policy (account unlock + password reset) =====
 # The persisted value in security_policies is the source of truth after migration.
 security:
   login:
