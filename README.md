@@ -92,6 +92,12 @@ Các công nghệ chính đang được sử dụng trong hệ thống:
 - Người dùng gửi email và OTP qua `POST /api/v1/auth/account-unlock/verify-otp`. Chỉ OTP hợp lệ mới nhận được reset token dùng một lần.
 - Người dùng gửi reset token, `newPassword` và `confirmPassword` qua `POST /api/v1/auth/account-unlock/reset-password`. Thành công mới mở khóa tài khoản, reset bộ đếm và thu hồi session cũ.
 
+### Quên mật khẩu
+
+- Người dùng gửi email qua `POST /api/v1/auth/password-reset/request`. Hệ thống chỉ gửi OTP cho tài khoản đang hoạt động và luôn trả thông báo chung để tránh lộ thông tin tài khoản.
+- Người dùng gửi email và OTP qua `POST /api/v1/auth/password-reset/verify-otp`. OTP hợp lệ trả về reset token dùng một lần.
+- Người dùng gửi reset token, `newPassword` và `confirmPassword` qua `POST /api/v1/auth/password-reset/reset-password`. Sau khi đổi mật khẩu, toàn bộ session cũ bị thu hồi.
+
 ## Quản trị rủi ro traffic cao
 
 | Rủi ro | Giải pháp |
