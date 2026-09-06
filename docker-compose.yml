@@ -1,0 +1,44 @@
+name: tikzy
+
+services:
+  backend:
+    image: registry.eraidev.id.vn/tikzy/tikzy-backend:${IMAGE_TAG:-latest}
+    container_name: tikzy-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: 8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - tikzy
+
+  redis:
+    image: redis:7-alpine
+    container_name: tikzy-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tikzy
+
+volumes:
+  redis-data:
+
+networks:
+  tikzy:
