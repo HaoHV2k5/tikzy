@@ -1,6 +1,6 @@
 # Tikzy Agent Instructions
 
-This file is the repository-level working agreement. Read it before making code changes.
+This file is the repository-level working agreement. Read it before making changes and read it again immediately before any commit or push.
 
 ## General Workflow
 
@@ -14,25 +14,32 @@ This file is the repository-level working agreement. Read it before making code 
 4. Preserve user changes. Never revert, reset, overwrite, or reformat unrelated work.
 5. Keep secrets out of Git. Never commit `.env`, credentials, tokens, private keys, or local IDE/build files such as `.idea/` and `target/`.
 6. Run the most relevant build, test, lint, or validation command after editing. Report failures honestly.
+7. Before committing or pushing, read this file again and follow the Git Workflow and Conventional Commits rules below.
 
 ## Git Workflow
 
 Follow this sequence when the user asks to commit or push:
 
-1. Review the complete working tree and identify the exact files belonging to the request.
-2. Separate unrelated changes. Do not stage them, and do not use `git add .` or `git add -A` without reviewing the result.
-3. Stage only intended files with explicit paths.
-4. Review the staged result:
+1. Read `AGENTS.md` again immediately before any commit or push command. Do not skip this step.
+2. Review the complete working tree and identify the exact files belonging to the request.
+3. Never commit to or push directly from the protected branches `main` or `develop`.
+   - If the current branch is `main` or `develop`, create a topic branch before staging or committing, for example `docs/readme-ops`, `ci/pipeline-quality-gates`, or `fix/security-cors`.
+   - Use `git switch -c <topic-branch>` so existing user changes are preserved. Never use a destructive command to force the branch change.
+   - Push only the topic branch. Changes destined for `main` or `develop` must go through the repository's pull-request/merge process.
+4. Separate unrelated changes. Do not stage them, and do not use `git add .` or `git add -A` without reviewing the result.
+5. Stage only intended files with explicit paths.
+6. Review the staged result:
    - `git status --short`
    - `git diff --cached --stat`
    - `git diff --cached`
    - `git diff --cached --check`
-5. Run the relevant verification command before committing.
-6. Create a new commit. Do not amend commits unless the user explicitly asks.
-7. Push the current branch to its configured remote, normally `origin`:
-   - `git push origin <branch>`
-8. Verify the result with `git status --short --branch`, `git log -1 --oneline`, and `git ls-remote origin refs/heads/<branch>`.
-9. Report the commit hash, commit message, branch, verification result, and any files intentionally left uncommitted.
+7. Run the relevant verification command before committing.
+8. Create a new commit that follows Conventional Commits. Do not amend commits unless the user explicitly asks.
+9. Push the verified topic branch to its configured remote, normally `origin`:
+   - `git push -u origin <topic-branch>` for the first push
+   - `git push origin <topic-branch>` for later pushes
+10. Verify the result with `git status --short --branch`, `git log -1 --oneline`, and `git ls-remote origin refs/heads/<topic-branch>`.
+11. Report the commit hash, commit message, topic branch, verification result, and any files intentionally left uncommitted.
 
 Do not force-push. Do not use destructive commands such as `git reset --hard` or `git checkout --` unless the user explicitly approves them. Push only when the user explicitly requests a push.
 
