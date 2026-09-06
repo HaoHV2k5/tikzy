@@ -1,0 +1,76 @@
+name: Tikzy CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: registry.eraidev.id.vn/tikzy/tikzy-backend
+
+jobs:
+  build-image:
+    name: Build and push image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: registry.eraidev.id.vn
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy on VPS
+    needs: build-image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pull and restart Tikzy
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+          IMAGE_TAG: ${{ github.sha }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: tikzy
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
+          port: 22
+          envs: HARBOR_USERNAME,HARBOR_PASSWORD,IMAGE_TAG
+          script_stop: true
+          script: |
+            set -e
+            cd /projects/tikzy
+            git checkout main
+            git pull --ff-only origin main
+
+            echo "$HARBOR_PASSWORD" | docker login registry.eraidev.id.vn \
+              --username "$HARBOR_USERNAME" \
+              --password-stdin
+            trap 'docker logout registry.eraidev.id.vn >/dev/null 2>&1 || true' EXIT
+
+            IMAGE_TAG="$IMAGE_TAG" docker compose -p tikzy pull
+            IMAGE_TAG="$IMAGE_TAG" docker compose -p tikzy up -d --remove-orphans
+            docker compose -p tikzy ps
