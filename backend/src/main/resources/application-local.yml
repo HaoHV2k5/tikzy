@@ -5,10 +5,12 @@ spring:
 
 # Dev local: cho phép ddl-auto update nếu không chạy Flyway
 springdoc:
-  swagger-ui:
-    path: /swagger-ui.html
   api-docs:
+    enabled: true
     path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
 
 logging:
   level:
