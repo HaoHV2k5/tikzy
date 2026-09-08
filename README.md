@@ -314,9 +314,22 @@ node_memory_MemAvailable_bytes{service="vps",environment="production"} / 1024^3
 
 # Disk còn trống (GiB)
 node_filesystem_avail_bytes{service="vps",environment="production",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"} / 1024^3
+
+# RAM container (MiB)
+container_memory_working_set_bytes{name=~"/tikzy-.*"} / 1024^2
+
+# CPU container (%) trong 5 phút
+100 * rate(container_cpu_usage_seconds_total{name=~"/tikzy-.*"}[5m])
+
+# Heartbeat của một container cụ thể
+container_last_seen{name="/tikzy-redis"}
+
+# Alert khi container Redis không còn xuất hiện trong metrics
+absent(container_last_seen{name="/tikzy-redis"})
 ```
 
 Ngưỡng khuyến nghị: RAM dùng trên `85%` trong `10m`, disk dùng trên `80%` trong `10m`, hoặc disk còn trống dưới `15%` thì route tới `telegram-oncall`.
+Alloy cũng scrape cAdvisor để theo dõi resource từng Docker container. Contact Point Telegram dùng template provisioned để hiển thị trạng thái, severity, service, environment, chi tiết, giá trị metric và dashboard URL.
 
 ### Telegram chatbot
 
