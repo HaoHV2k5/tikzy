@@ -80,4 +80,6 @@ jobs:
             docker compose --env-file .env -p tikzy-observability \
               -f observability/docker-compose.prod.yml up -d --remove-orphans
             docker compose --env-file .env -p tikzy-observability \
+              -f observability/docker-compose.prod.yml restart grafana
+            docker compose --env-file .env -p tikzy-observability \
               -f observability/docker-compose.prod.yml ps
