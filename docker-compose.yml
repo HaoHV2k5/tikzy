@@ -9,6 +9,7 @@ services:
       - .env
     environment:
       SERVER_PORT: 8080
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}

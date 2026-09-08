@@ -74,3 +74,10 @@ jobs:
             IMAGE_TAG="$IMAGE_TAG" docker compose -p tikzy pull
             IMAGE_TAG="$IMAGE_TAG" docker compose -p tikzy up -d --remove-orphans
             docker compose -p tikzy ps
+
+            docker compose --env-file .env -p tikzy-observability \
+              -f observability/docker-compose.prod.yml pull
+            docker compose --env-file .env -p tikzy-observability \
+              -f observability/docker-compose.prod.yml up -d --remove-orphans
+            docker compose --env-file .env -p tikzy-observability \
+              -f observability/docker-compose.prod.yml ps

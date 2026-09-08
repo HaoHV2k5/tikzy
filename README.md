@@ -251,6 +251,42 @@ Ví dụ truy vấn Loki sau khi pipeline JSON được bật:
 - Gửi traces đến Tempo bằng OTLP; truyền `traceparent` giữa các service/provider khi có hỗ trợ.
 - Dashboard tối thiểu cần có request rate, 4xx/5xx, p95/p99 latency, JVM heap/GC, connection pool, Redis health, payment callback, refund failure và container restart.
 
+### Chạy local từng bước
+
+Cấu hình chạy local nằm trong thư mục [`observability/`](./observability/). File này là Compose override, nên Compose production hiện tại không bị thay đổi khi không nạp override.
+
+1. Đảm bảo file `.env` ở thư mục gốc có đủ biến cho backend. File này chỉ nằm local, không commit.
+2. Từ thư mục gốc repository, build backend và khởi động toàn bộ stack:
+
+   ```bash
+   docker compose -f docker-compose.yml -f observability/docker-compose.yml up -d --build
+   ```
+
+3. Kiểm tra container:
+
+   ```bash
+   docker compose -f docker-compose.yml -f observability/docker-compose.yml ps
+   ```
+
+4. Mở Grafana tại `http://localhost:3000`, đăng nhập mặc định `admin/admin` khi chạy local.
+5. Vào **Explore**, chọn datasource `Loki` và thử truy vấn:
+
+   ```logql
+   {container="tikzy-backend"}
+   {container="tikzy-backend"} | json level="log.level" | level="ERROR"
+   ```
+
+6. Chọn datasource `Mimir` và thử truy vấn `up{service="tikzy-backend"}`. Giá trị `1` nghĩa là Alloy scrape được metrics của backend.
+7. Chọn datasource `Tempo`, tìm service `tikzy-backend`, sau đó mở một trace để xem các span của request.
+
+Khi dừng local stack, giữ lại dữ liệu đã lưu:
+
+```bash
+docker compose -f docker-compose.yml -f observability/docker-compose.yml down
+```
+
+Muốn xóa toàn bộ dữ liệu logs, metrics, traces và Grafana local thì mới thêm `-v`.
+
 Các alert nên cấu hình trong Grafana:
 
 | Alert | Điều kiện gợi ý | Kênh |
@@ -271,7 +307,36 @@ Các alert nên cấu hình trong Grafana:
 
 Token và chat ID chỉ lưu trong secret store/Grafana provisioning secret trên VPS. Không hard-code trong README, workflow, Docker image hoặc log.
 
-> Trạng thái repository: workflow deploy và container runtime đã có; cấu hình Grafana, Loki, Mimir, Tempo, Alloy/OpenTelemetry và Telegram chưa được commit trong repo này. Phần trên là chuẩn tích hợp và runbook cần áp dụng khi dựng observability stack trên VPS.
+> Trạng thái repository: cấu hình local của Grafana, Loki, Mimir, Tempo và Alloy/OpenTelemetry đã có trong `observability/`. Cấu hình trên dùng filesystem và image `latest` để học tập/local; production cần pin version, object storage, retention, authentication và backup.
+
+### Deploy observability trên production
+
+Production chạy observability bằng Compose project riêng, không nạp `observability/docker-compose.yml` như override của backend. File production không chạy thêm backend container và dùng Docker network hiện có của app.
+
+Trên VPS, bổ sung vào `.env`:
+
+```env
+TIKZY_NETWORK=tikzy_tikzy
+GRAFANA_ROOT_URL=https://grafana.example.com
+GRAFANA_ADMIN_USER=<admin-user>
+GRAFANA_ADMIN_PASSWORD=<strong-password>
+```
+
+Nên thay các biến `*_VERSION` bằng version đã kiểm thử trước khi chạy lâu dài. Khởi động lần đầu:
+
+```bash
+cd /projects/tikzy
+docker compose --env-file .env -p tikzy-observability \
+  -f observability/docker-compose.prod.yml config
+docker compose --env-file .env -p tikzy-observability \
+  -f observability/docker-compose.prod.yml pull
+docker compose --env-file .env -p tikzy-observability \
+  -f observability/docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file .env -p tikzy-observability \
+  -f observability/docker-compose.prod.yml ps
+```
+
+Grafana chỉ bind `127.0.0.1:3000`; Cloudflare Tunnel route hostname Grafana tới `http://127.0.0.1:3000`. Workflow CI/CD cập nhật observability project sau khi deploy backend. Không dùng `docker compose -f docker-compose.yml -f observability/docker-compose.yml up -d` trên production vì đó là override dành cho local.
 
 ## Các nhóm người dùng
 
