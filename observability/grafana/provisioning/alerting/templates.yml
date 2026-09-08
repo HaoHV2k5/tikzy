@@ -1,0 +1,26 @@
+apiVersion: 1
+
+templates:
+  - orgId: 1
+    name: telegram.message
+    template: |
+      {{ define "telegram.message" -}}
+      {{ if eq .Status "firing" }}🚨🚨 {{ else }}✅ {{ end }}{{ .Status | toUpper }}: {{ index .CommonLabels "alertname" }}
+
+      ├─ Trạng thái: {{ if eq .Status "firing" }}ĐANG XẢY RA 🔴{{ else }}ĐÃ KHÔI PHỤC 🟢{{ end }}
+      ├─ Mức độ: {{ index .CommonLabels "severity" }}
+      ├─ Service: {{ index .CommonLabels "service" }}
+      ├─ Environment: {{ index .CommonLabels "environment" }}
+      ├─ Thời gian: {{ (index .Alerts 0).StartsAt }}
+      {{- range .Alerts.Firing }}
+      ├─ Chi tiết: {{ index .Annotations "description" }}
+      ├─ Giá trị: {{ .ValueString }}
+      {{- end }}
+      {{- range .Alerts.Resolved }}
+      ├─ Chi tiết: {{ index .Annotations "description" }}
+      {{- end }}
+      {{ with (index .Alerts 0).DashboardURL }}
+      ├─ Dashboard: {{ . }}
+      {{ end }}
+      └─ Source: {{ (index .Alerts 0).GeneratorURL }}
+      {{- end }}
