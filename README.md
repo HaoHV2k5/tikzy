@@ -301,9 +301,10 @@ Các alert nên cấu hình trong Grafana:
 ### Telegram chatbot
 
 1. Tạo bot bằng `@BotFather` và lấy `TELEGRAM_BOT_TOKEN`.
-2. Lấy `TELEGRAM_CHAT_ID` của nhóm on-call, sau đó cấu hình Telegram Contact Point trong Grafana hoặc webhook adapter nội bộ.
-3. Tạo notification policy theo mức độ `critical`, `warning` và route alert của production vào nhóm vận hành.
-4. Test bằng một alert giả lập; kiểm tra message có service, environment, severity, dashboard URL và thời điểm xảy ra.
+2. Thêm bot vào nhóm on-call và lấy `TELEGRAM_CHAT_ID` của nhóm.
+3. Điền hai biến này vào `.env` trên VPS. Production provision Contact Point `telegram-oncall` từ [`observability/grafana/provisioning/alerting/contact-points.yml`](./observability/grafana/provisioning/alerting/contact-points.yml).
+4. Restart Grafana, vào **Alerting → Contact points** và bấm **Test** để kiểm tra.
+5. Tạo notification policy theo mức độ `critical`, `warning` và route alert của production vào contact point `telegram-oncall`.
 
 Token và chat ID chỉ lưu trong secret store/Grafana provisioning secret trên VPS. Không hard-code trong README, workflow, Docker image hoặc log.
 
@@ -337,6 +338,13 @@ docker compose --env-file .env -p tikzy-observability \
 ```
 
 Grafana chỉ bind `127.0.0.1:3000`; Cloudflare Tunnel route hostname Grafana tới `http://127.0.0.1:3000`. Workflow CI/CD cập nhật observability project sau khi deploy backend. Không dùng `docker compose -f docker-compose.yml -f observability/docker-compose.yml up -d` trên production vì đó là override dành cho local.
+
+Khi thay đổi datasource provisioning trong `observability/grafana/provisioning/`, cần restart Grafana để nạp cấu hình mới:
+
+```bash
+docker compose --env-file .env -p tikzy-observability \
+  -f observability/docker-compose.prod.yml restart grafana
+```
 
 ## Các nhóm người dùng
 
