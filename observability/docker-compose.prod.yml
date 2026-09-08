@@ -31,9 +31,29 @@ services:
     networks:
       - tikzy
 
+  node-exporter:
+    image: prom/node-exporter:${NODE_EXPORTER_VERSION:-latest}
+    restart: unless-stopped
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --path.udev.data=/host/run/udev/data
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)(\$\$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+      - /run:/host/run:ro
+    expose:
+      - "9100"
+    networks:
+      - tikzy
+
   alloy:
     image: grafana/alloy:${ALLOY_VERSION:-latest}
     restart: unless-stopped
+    privileged: true
     command:
       - run
       - /etc/alloy/config.alloy
@@ -42,11 +62,17 @@ services:
     volumes:
       - ./alloy/config.prod.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
       - alloy-data:/var/lib/alloy/data
     depends_on:
       - loki
       - tempo
       - mimir
+      - node-exporter
     networks:
       - tikzy
 
