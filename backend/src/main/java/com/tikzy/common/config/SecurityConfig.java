@@ -38,7 +38,10 @@ public class SecurityConfig {
             "/api/v1/auth/logout-all",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/v3/api-docs/**"
+            "/v3/api-docs/**",
+            "/actuator/health",
+            "/actuator/health/**",
+            "/actuator/prometheus"
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
