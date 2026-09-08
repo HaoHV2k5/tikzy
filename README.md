@@ -298,6 +298,26 @@ Các alert nên cấu hình trong Grafana:
 | Payment/refund lỗi | Tỷ lệ callback thất bại hoặc pending tăng | Telegram |
 | VPS bất thường | Disk, memory, CPU hoặc container restart vượt ngưỡng | Telegram |
 
+Alloy production scrape thêm `node-exporter` để đưa metrics VPS vào Mimir. Một số query hữu ích trong Grafana:
+
+```promql
+# RAM đang dùng (%)
+100 * (1 - node_memory_MemAvailable_bytes{service="vps",environment="production"}
+  / node_memory_MemTotal_bytes{service="vps",environment="production"})
+
+# RAM còn trống (GiB)
+node_memory_MemAvailable_bytes{service="vps",environment="production"} / 1024^3
+
+# Disk đang dùng (%) trên root filesystem
+100 * (1 - node_filesystem_avail_bytes{service="vps",environment="production",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"}
+  / node_filesystem_size_bytes{service="vps",environment="production",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"})
+
+# Disk còn trống (GiB)
+node_filesystem_avail_bytes{service="vps",environment="production",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"} / 1024^3
+```
+
+Ngưỡng khuyến nghị: RAM dùng trên `85%` trong `10m`, disk dùng trên `80%` trong `10m`, hoặc disk còn trống dưới `15%` thì route tới `telegram-oncall`.
+
 ### Telegram chatbot
 
 1. Tạo bot bằng `@BotFather` và lấy `TELEGRAM_BOT_TOKEN`.
