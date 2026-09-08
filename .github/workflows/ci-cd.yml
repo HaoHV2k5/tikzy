@@ -81,5 +81,19 @@ jobs:
               -f observability/docker-compose.prod.yml up -d --remove-orphans
             docker compose --env-file .env -p tikzy-observability \
               -f observability/docker-compose.prod.yml restart grafana
+            for attempt in 1 2 3 4 5; do
+              if curl --fail --silent --show-error --max-time 10 \
+                http://127.0.0.1:3000/api/health >/dev/null; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                docker compose --env-file .env -p tikzy-observability \
+                  -f observability/docker-compose.prod.yml ps
+                docker compose --env-file .env -p tikzy-observability \
+                  -f observability/docker-compose.prod.yml logs --tail=100 grafana
+                exit 1
+              fi
+              sleep 5
+            done
             docker compose --env-file .env -p tikzy-observability \
               -f observability/docker-compose.prod.yml ps
