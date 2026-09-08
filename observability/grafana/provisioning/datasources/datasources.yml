@@ -19,7 +19,8 @@ datasources:
     access: proxy
     url: http://mimir:9009/prometheus
     jsonData:
-      httpMethod: POST
+      httpMethod: GET
+      prometheusType: Mimir
 
   - name: Tempo
     uid: tempo
