@@ -325,7 +325,7 @@ container_memory_working_set_bytes{name=~"/tikzy-.*"} / 1024^2
 container_last_seen{name="/tikzy-redis"}
 
 # Alert khi container Redis không còn xuất hiện trong metrics
-absent(container_last_seen{name="/tikzy-redis"})
+count(container_last_seen{name=~"/?tikzy-redis"}) or vector(0)
 ```
 
 Ngưỡng khuyến nghị: RAM dùng trên `85%` trong `10m`, disk dùng trên `80%` trong `10m`, hoặc disk còn trống dưới `15%` thì route tới `telegram-oncall`.
