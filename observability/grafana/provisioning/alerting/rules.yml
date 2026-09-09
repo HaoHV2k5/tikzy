@@ -1,0 +1,618 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: tikzy-infrastructure
+    folder: Tikzy Infrastructure
+    interval: 1m
+    rules:
+      - uid: tikzy-backend-down
+        title: Backend DOWN
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: up{service="tikzy-backend",environment="production"}
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+          - refId: CPUQ
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle",service="vps",environment="production"}[5m])))
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: CPUQ
+          - refId: CPU
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: CPUQ
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: CPU
+              type: reduce
+          - refId: RAMQ
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: 100 * (1 - avg(node_memory_MemAvailable_bytes{service="vps",environment="production"} / node_memory_MemTotal_bytes{service="vps",environment="production"}))
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: RAMQ
+          - refId: RAM
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: RAMQ
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: RAM
+              type: reduce
+          - refId: VPSQ
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: up{service="vps",environment="production"}
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: VPSQ
+          - refId: VPS
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: VPSQ
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: VPS
+              type: reduce
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          summary: Spring Boot backend không phản hồi
+          description: Backend scrape target đang DOWN trong ít nhất 2 phút.
+          snapshot: |
+            Backend: DOWN
+            VPS node-exporter: {{ with $$values.VPS }}{{ if eq .Value 1.0 }}UP{{ else }}DOWN{{ end }}{{ else }}n/a{{ end }}
+            CPU: {{ with $$values.CPU }}{{ printf "%.0f" .Value }}%{{ else }}n/a{{ end }}
+            RAM: {{ with $$values.RAM }}{{ printf "%.0f" .Value }}%{{ else }}n/a{{ end }}
+        labels:
+          severity: critical
+          service: tikzy-backend
+          environment: production
+        notification_settings:
+          receiver: telegram-oncall
+          group_by:
+            - alertname
+            - service
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: tikzy-redis-down
+        title: Redis DOWN
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: absent(container_last_seen{name="/tikzy-redis"})
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          summary: Redis container không còn được cAdvisor nhìn thấy
+          description: Redis không xuất hiện trong container metrics trong ít nhất 2 phút.
+        labels:
+          severity: critical
+          service: redis
+          environment: production
+        notification_settings:
+          receiver: telegram-oncall
+          group_by:
+            - alertname
+            - service
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: tikzy-observability-down
+        title: Observability service DOWN
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: up{service=~"alloy|grafana|loki|mimir|tempo",environment="production"}
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          summary: Một service observability không phản hồi
+          description: Alloy đang scrape một service observability với trạng thái DOWN.
+        labels:
+          severity: critical
+          component: observability
+          environment: production
+        notification_settings:
+          receiver: telegram-oncall
+          group_by:
+            - alertname
+            - service
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: tikzy-node-exporter-down
+        title: VPS node-exporter DOWN
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: up{instance="node-exporter:9100",service="vps",environment="production"}
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          summary: Không lấy được metrics VPS
+          description: node-exporter không phản hồi, các cảnh báo RAM, disk và CPU có thể không còn tin cậy.
+        labels:
+          severity: critical
+          service: vps
+          environment: production
+        notification_settings:
+          receiver: telegram-oncall
+          group_by:
+            - alertname
+            - service
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: tikzy-memory-high
+        title: VPS memory usage high
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: 100 * (1 - node_memory_MemAvailable_bytes{service="vps",environment="production"} / node_memory_MemTotal_bytes{service="vps",environment="production"})
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 85
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 10m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          summary: RAM VPS vượt 85%
+          description: RAM VPS đang sử dụng cao liên tục trong 10 phút.
+        labels:
+          severity: warning
+          service: vps
+          environment: production
+        notification_settings:
+          receiver: telegram-oncall
+          group_by:
+            - alertname
+            - service
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: tikzy-disk-low
+        title: VPS disk available low
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: 100 * node_filesystem_avail_bytes{service="vps",environment="production",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{service="vps",environment="production",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"}
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 15
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 10m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          summary: Disk VPS còn dưới 15%
+          description: Dung lượng trống của root filesystem đang dưới 15%.
+        labels:
+          severity: critical
+          service: vps
+          environment: production
+        notification_settings:
+          receiver: telegram-oncall
+          group_by:
+            - alertname
+            - service
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: tikzy-cpu-high
+        title: VPS CPU usage high
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle",service="vps",environment="production"}[5m])))
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 80
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 10m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          summary: CPU VPS vượt 80%
+          description: CPU VPS đang sử dụng cao liên tục trong 10 phút.
+        labels:
+          severity: warning
+          service: vps
+          environment: production
+        notification_settings:
+          receiver: telegram-oncall
+          group_by:
+            - alertname
+            - service
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
