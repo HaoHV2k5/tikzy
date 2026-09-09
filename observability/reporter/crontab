@@ -1,0 +1,2 @@
+# Chạy báo cáo sức khỏe hệ thống lúc 00:00 mỗi ngày (theo múi giờ Asia/Ho_Chi_Minh)
+0 0 * * * /scripts/daily_report.sh >> /var/log/daily_report.log 2>&1

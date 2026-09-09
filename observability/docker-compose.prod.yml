@@ -101,6 +101,22 @@ services:
     networks:
       - tikzy
 
+  daily-reporter:
+    build:
+      context: ./reporter
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      TZ: "Asia/Ho_Chi_Minh"
+      MIMIR_URL: "http://mimir:9009"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN must be set}"
+      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:?TELEGRAM_CHAT_ID must be set}"
+      RUN_ON_STARTUP: "${DAILY_REPORT_RUN_ON_STARTUP:-false}"
+    depends_on:
+      - mimir
+    networks:
+      - tikzy
+
 networks:
   tikzy:
     external: true
