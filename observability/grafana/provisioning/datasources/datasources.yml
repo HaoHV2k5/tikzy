@@ -18,9 +18,12 @@ datasources:
     type: prometheus
     access: proxy
     url: http://mimir:9009/prometheus
+    version: 2
     jsonData:
       httpMethod: GET
       prometheusType: Mimir
+      prometheusVersion: "2.0.0"
+      seriesEndpoint: false
 
   - name: Tempo
     uid: tempo

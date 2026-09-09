@@ -63,6 +63,39 @@ prometheus.scrape "tikzy" {
   forward_to      = [prometheus.remote_write.mimir.receiver]
 }
 
+prometheus.scrape "observability" {
+  targets = [
+    {
+      "__address__" = "alloy:12345",
+      "service"     = "alloy",
+      "environment" = "production",
+    },
+    {
+      "__address__" = "grafana:3000",
+      "service"     = "grafana",
+      "environment" = "production",
+    },
+    {
+      "__address__" = "loki:3100",
+      "service"     = "loki",
+      "environment" = "production",
+    },
+    {
+      "__address__" = "mimir:9009",
+      "service"     = "mimir",
+      "environment" = "production",
+    },
+    {
+      "__address__" = "tempo:3200",
+      "service"     = "tempo",
+      "environment" = "production",
+    },
+  ]
+
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.mimir.receiver]
+}
+
 prometheus.exporter.cadvisor "docker" {
   docker_host      = "unix:///var/run/docker.sock"
   storage_duration = "2m"
