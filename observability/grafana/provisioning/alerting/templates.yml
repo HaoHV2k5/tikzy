@@ -14,10 +14,18 @@ templates:
       ├─ Thời gian: {{ (index .Alerts 0).StartsAt }}
       {{- range .Alerts.Firing }}
       ├─ Chi tiết: {{ index .Annotations "description" }}
+      {{- with index .Annotations "snapshot" }}
+      ├─ Snapshot:
+      {{ . }}
+      {{- end }}
       ├─ Giá trị: {{ .ValueString }}
       {{- end }}
       {{- range .Alerts.Resolved }}
       ├─ Chi tiết: {{ index .Annotations "description" }}
+      {{- with index .Annotations "snapshot" }}
+      ├─ Snapshot:
+      {{ . }}
+      {{- end }}
       {{- end }}
       {{ with (index .Alerts 0).DashboardURL }}
       ├─ Dashboard: {{ . }}
