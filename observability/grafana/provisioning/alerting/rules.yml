@@ -181,7 +181,7 @@ groups:
                 type: prometheus
                 uid: mimir
               editorMode: code
-              expr: absent(container_last_seen{name=~"/?tikzy-redis"})
+              expr: count(container_last_seen{name=~"/?tikzy-redis"}) or vector(0)
               intervalMs: 15000
               maxDataPoints: 43200
               range: true
@@ -204,8 +204,8 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
-                    type: gt
+                      - 1
+                    type: lt
                   operator:
                     type: and
                   query:
