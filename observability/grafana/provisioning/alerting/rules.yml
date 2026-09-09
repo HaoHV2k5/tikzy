@@ -181,7 +181,7 @@ groups:
                 type: prometheus
                 uid: mimir
               editorMode: code
-              expr: absent(container_last_seen{name="/tikzy-redis"})
+              expr: absent(container_last_seen{name=~"/?tikzy-redis"})
               intervalMs: 15000
               maxDataPoints: 43200
               range: true
@@ -223,12 +223,98 @@ groups:
               maxDataPoints: 43200
               refId: C
               type: threshold
+          - refId: CPUQ
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle",service="vps",environment="production"}[5m])))
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: CPUQ
+          - refId: CPU
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: CPUQ
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: CPU
+              type: reduce
+          - refId: RAMQ
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: 100 * (1 - avg(node_memory_MemAvailable_bytes{service="vps",environment="production"} / node_memory_MemTotal_bytes{service="vps",environment="production"}))
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: RAMQ
+          - refId: RAM
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: RAMQ
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: RAM
+              type: reduce
+          - refId: VPSQ
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: up{service="vps",environment="production"}
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: VPSQ
+          - refId: VPS
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: VPSQ
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: VPS
+              type: reduce
         for: 2m
         noDataState: Alerting
         execErrState: Alerting
         annotations:
           summary: Redis container không còn được cAdvisor nhìn thấy
           description: Redis không xuất hiện trong container metrics trong ít nhất 2 phút.
+          snapshot: |
+            Redis: DOWN
+            VPS node-exporter: {{ with $$values.VPS }}{{ if eq .Value 1.0 }}UP{{ else }}DOWN{{ end }}{{ else }}n/a{{ end }}
+            CPU: {{ with $$values.CPU }}{{ printf "%.0f" .Value }}%{{ else }}n/a{{ end }}
+            RAM: {{ with $$values.RAM }}{{ printf "%.0f" .Value }}%{{ else }}n/a{{ end }}
         labels:
           severity: critical
           service: redis
@@ -298,14 +384,101 @@ groups:
               maxDataPoints: 43200
               refId: C
               type: threshold
+          - refId: CPUQ
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle",service="vps",environment="production"}[5m])))
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: CPUQ
+          - refId: CPU
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: CPUQ
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: CPU
+              type: reduce
+          - refId: RAMQ
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: 100 * (1 - avg(node_memory_MemAvailable_bytes{service="vps",environment="production"} / node_memory_MemTotal_bytes{service="vps",environment="production"}))
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: RAMQ
+          - refId: RAM
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: RAMQ
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: RAM
+              type: reduce
+          - refId: VPSQ
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: mimir
+            model:
+              datasource:
+                type: prometheus
+                uid: mimir
+              editorMode: code
+              expr: up{service="vps",environment="production"}
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: VPSQ
+          - refId: VPS
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: VPSQ
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: VPS
+              type: reduce
         for: 2m
         noDataState: Alerting
         execErrState: Alerting
         annotations:
           summary: Một service observability không phản hồi
-          description: Alloy đang scrape một service observability với trạng thái DOWN.
+          description: Alloy đang scrape một service observability với trạng thái DOWN hoặc chưa có metrics.
+          snapshot: |
+            Observability Stack: DOWN / NO DATA
+            VPS node-exporter: {{ with $$values.VPS }}{{ if eq .Value 1.0 }}UP{{ else }}DOWN{{ end }}{{ else }}n/a{{ end }}
+            CPU: {{ with $$values.CPU }}{{ printf "%.0f" .Value }}%{{ else }}n/a{{ end }}
+            RAM: {{ with $$values.RAM }}{{ printf "%.0f" .Value }}%{{ else }}n/a{{ end }}
         labels:
           severity: critical
+          service: observability
           component: observability
           environment: production
         notification_settings:

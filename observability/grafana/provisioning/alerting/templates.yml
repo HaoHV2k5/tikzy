@@ -8,20 +8,20 @@ templates:
       {{ if eq .Status "firing" }}🚨🚨 {{ else }}✅ {{ end }}{{ .Status | toUpper }}: {{ index .CommonLabels "alertname" }}
 
       ├─ Trạng thái: {{ if eq .Status "firing" }}ĐANG XẢY RA 🔴{{ else }}ĐÃ KHÔI PHỤC 🟢{{ end }}
-      ├─ Mức độ: {{ index .CommonLabels "severity" }}
-      ├─ Service: {{ index .CommonLabels "service" }}
-      ├─ Environment: {{ index .CommonLabels "environment" }}
+      ├─ Mức độ: {{ with (index .CommonLabels "severity") }}{{ . }}{{ else }}critical{{ end }}
+      ├─ Service: {{ with (index .CommonLabels "service") }}{{ . }}{{ else }}{{ with (index .CommonLabels "component") }}{{ . }}{{ else }}hệ thống{{ end }}{{ end }}
+      ├─ Environment: {{ with (index .CommonLabels "environment") }}{{ . }}{{ else }}production{{ end }}
       ├─ Thời gian: {{ (index .Alerts 0).StartsAt }}
       {{- range .Alerts.Firing }}
-      ├─ Chi tiết: {{ index .Annotations "description" }}
+      ├─ Chi tiết: {{ with index .Annotations "description" }}{{ . }}{{ else }}{{ with index .Annotations "summary" }}{{ . }}{{ else }}Cảnh báo hệ thống{{ end }}{{ end }}
       {{- with index .Annotations "snapshot" }}
       ├─ Snapshot:
       {{ . }}
       {{- end }}
-      ├─ Giá trị: {{ .ValueString }}
+      ├─ Giá trị: {{ with .ValueString }}{{ . }}{{ else }}Không có dữ liệu (No Data){{ end }}
       {{- end }}
       {{- range .Alerts.Resolved }}
-      ├─ Chi tiết: {{ index .Annotations "description" }}
+      ├─ Chi tiết: {{ with index .Annotations "description" }}{{ . }}{{ else }}{{ with index .Annotations "summary" }}{{ . }}{{ else }}Cảnh báo hệ thống{{ end }}{{ end }}
       {{- with index .Annotations "snapshot" }}
       ├─ Snapshot:
       {{ . }}
