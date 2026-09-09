@@ -76,9 +76,9 @@ jobs:
             docker compose -p tikzy ps
 
             docker compose --env-file .env -p tikzy-observability \
-              -f observability/docker-compose.prod.yml pull
+              -f observability/docker-compose.prod.yml pull --ignore-buildable
             docker compose --env-file .env -p tikzy-observability \
-              -f observability/docker-compose.prod.yml up -d --remove-orphans
+              -f observability/docker-compose.prod.yml up -d --build --remove-orphans
             docker compose --env-file .env -p tikzy-observability \
               -f observability/docker-compose.prod.yml restart grafana
             for attempt in 1 2 3 4 5; do
