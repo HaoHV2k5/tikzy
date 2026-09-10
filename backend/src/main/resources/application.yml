@@ -108,6 +108,15 @@ ticket:
   reservation-ttl-minutes: 15        # giữ chỗ 15 phút (Redis lock + orders.expires_at)
   qr-secret: ${QR_SECRET}  # HMAC-SHA256 ký số QR payload
 
+# ===== Local mock accounts (never enable in production) =====
+tikzy:
+  seed:
+    admin:
+      enabled: false
+      email: ${TIKZY_SEED_ADMIN_EMAIL:${ADMIN_EMAIL:admin@tikzy.local}}
+      password: ${TIKZY_SEED_ADMIN_PASSWORD:}
+      full-name: Tikzy Administrator
+
 # ===== Logging =====
 logging:
   level:
