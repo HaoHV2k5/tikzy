@@ -16,3 +16,9 @@ logging:
   level:
     org.hibernate.SQL: debug
     org.hibernate.orm.deprecation: off
+
+tikzy:
+  seed:
+    admin:
+      enabled: true
+      password: ${TIKZY_SEED_ADMIN_PASSWORD:Admin@123456}
