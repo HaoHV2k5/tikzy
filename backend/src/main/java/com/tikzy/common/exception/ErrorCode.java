@@ -32,6 +32,12 @@ public enum ErrorCode {
     PASSWORD_CONFIRMATION_MISMATCH(1021, "Mật khẩu xác nhận không khớp", HttpStatus.BAD_REQUEST),
     INVALID_PASSWORD_RESET_OTP(1022, "Mã OTP đặt lại mật khẩu không đúng hoặc đã bị vô hiệu hóa", HttpStatus.BAD_REQUEST),
     PASSWORD_RESET_OTP_EXPIRED(1023, "Mã OTP đặt lại mật khẩu đã hết hạn", HttpStatus.BAD_REQUEST),
+    ORGANIZER_APPLICATION_NOT_FOUND(1024, "Không tìm thấy hồ sơ đăng ký ban tổ chức", HttpStatus.NOT_FOUND),
+    ORGANIZER_APPLICATION_PENDING(1025, "Bạn đã có hồ sơ đăng ký ban tổ chức đang chờ duyệt", HttpStatus.CONFLICT),
+    ALREADY_ORGANIZER(1026, "Tài khoản đã là ban tổ chức", HttpStatus.CONFLICT),
+    INVALID_ORGANIZER_APPLICATION(1027, "Thông tin đăng ký ban tổ chức không hợp lệ", HttpStatus.BAD_REQUEST),
+    ORGANIZER_APPLICATION_ALREADY_REVIEWED(1028, "Hồ sơ đăng ký ban tổ chức đã được xử lý", HttpStatus.CONFLICT),
+    ORGANIZER_DOCUMENT_IN_USE(1029, "Số giấy tờ hoặc mã số thuế đã được dùng cho hồ sơ khác", HttpStatus.CONFLICT),
 
     // Event 2xxx
     EVENT_NOT_FOUND(2001, "Không tìm thấy sự kiện", HttpStatus.NOT_FOUND),
