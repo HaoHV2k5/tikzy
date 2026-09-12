@@ -45,6 +45,12 @@ public enum ErrorCode {
     EVENT_ALREADY_CANCELLED(2003, "Sự kiện đã bị hủy", HttpStatus.BAD_REQUEST),
     CATEGORY_NOT_FOUND(2004, "Không tìm thấy danh mục", HttpStatus.NOT_FOUND),
     SHOW_TIME_NOT_FOUND(2005, "Không tìm thấy suất diễn", HttpStatus.NOT_FOUND),
+    CATEGORY_ALREADY_EXISTS(2006, "Tên hoặc slug danh mục đã tồn tại", HttpStatus.CONFLICT),
+    INVALID_CATEGORY_STATUS(2007, "Trạng thái danh mục không hợp lệ", HttpStatus.CONFLICT),
+    CATEGORY_REQUEST_NOT_FOUND(2008, "Không tìm thấy đề xuất danh mục", HttpStatus.NOT_FOUND),
+    CATEGORY_REQUEST_ALREADY_REVIEWED(2010, "Đề xuất danh mục đã được xử lý", HttpStatus.CONFLICT),
+    INVALID_CATEGORY_REQUEST(2011, "Thông tin đề xuất danh mục không hợp lệ", HttpStatus.BAD_REQUEST),
+    INVALID_CATEGORY_DATA(2012, "Thông tin danh mục không hợp lệ", HttpStatus.BAD_REQUEST),
 
     // Ticket / Inventory 3xxx
     TICKET_TYPE_NOT_FOUND(3001, "Không tìm thấy hạng vé", HttpStatus.NOT_FOUND),
