@@ -46,7 +46,7 @@ loki.write "default" {
 
 prometheus.scrape "tikzy" {
   targets = [{
-    "__address__"      = "backend:8081",
+    "__address__"      = "host.docker.internal:8081",
     "__metrics_path__" = "/actuator/prometheus",
     "service"          = "tikzy-backend",
     "environment"      = "local",
