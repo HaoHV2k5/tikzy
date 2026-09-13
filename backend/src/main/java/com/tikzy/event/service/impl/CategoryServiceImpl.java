@@ -67,8 +67,25 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<CategoryResponse> getPublished(Pageable pageable) {
+        return categoryRepository.findAllByStatus(CategoryStatus.PUBLISHED, pageable)
+                .map(categoryMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public CategoryResponse getById(UUID categoryId) {
         return categoryMapper.toResponse(findCategory(categoryId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CategoryResponse getPublishedById(UUID categoryId) {
+        Category category = findCategory(categoryId);
+        if (category.getStatus() != CategoryStatus.PUBLISHED) {
+            throw new AppException(ErrorCode.CATEGORY_NOT_FOUND);
+        }
+        return categoryMapper.toResponse(category);
     }
 
     @Override

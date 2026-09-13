@@ -27,15 +27,31 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/admin/categories")
+@RequestMapping("/api/v1")
 @RequiredArgsConstructor
 @Validated
-@PreAuthorize("hasRole('ADMIN')")
 public class CategoryController {
 
     private final CategoryService categoryService;
 
-    @PostMapping
+    @GetMapping("/categories")
+    public ApiResponse<List<CategoryResponse>> getPublished(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return ApiResponse.page(
+                "Lấy danh sách danh mục thành công",
+                categoryService.getPublished(PageRequest.of(page, size, categorySort())));
+    }
+
+    @GetMapping("/categories/{categoryId}")
+    public ApiResponse<CategoryResponse> getPublishedById(@PathVariable UUID categoryId) {
+        return ApiResponse.ok(
+                "Lấy thông tin danh mục thành công",
+                categoryService.getPublishedById(categoryId));
+    }
+
+    @PostMapping("/admin/categories")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CategoryResponse> create(
             @Valid @RequestBody CreateCategoryRequest request) {
         return ApiResponse.ok(
@@ -43,26 +59,27 @@ public class CategoryController {
                 categoryService.create(request));
     }
 
-    @GetMapping
+    @GetMapping("/admin/categories")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<List<CategoryResponse>> getAll(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        Sort sort = Sort.by(Sort.Direction.ASC, "sortOrder")
-                .and(Sort.by(Sort.Direction.DESC, "createdAt"));
         return ApiResponse.page(
                 "Lấy danh sách danh mục thành công",
-                categoryService.getAll(status, PageRequest.of(page, size, sort)));
+                categoryService.getAll(status, PageRequest.of(page, size, categorySort())));
     }
 
-    @GetMapping("/{categoryId}")
+    @GetMapping("/admin/categories/{categoryId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CategoryResponse> getById(@PathVariable UUID categoryId) {
         return ApiResponse.ok(
                 "Lấy thông tin danh mục thành công",
                 categoryService.getById(categoryId));
     }
 
-    @PatchMapping("/{categoryId}")
+    @PatchMapping("/admin/categories/{categoryId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CategoryResponse> update(
             @PathVariable UUID categoryId,
             @Valid @RequestBody UpdateCategoryRequest request) {
@@ -71,17 +88,24 @@ public class CategoryController {
                 categoryService.update(categoryId, request));
     }
 
-    @PostMapping("/{categoryId}/publish")
+    @PostMapping("/admin/categories/{categoryId}/publish")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CategoryResponse> publish(@PathVariable UUID categoryId) {
         return ApiResponse.ok(
                 "Công khai danh mục thành công",
                 categoryService.publish(categoryId));
     }
 
-    @DeleteMapping("/{categoryId}")
+    @DeleteMapping("/admin/categories/{categoryId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CategoryResponse> archive(@PathVariable UUID categoryId) {
         return ApiResponse.ok(
                 "Lưu trữ danh mục thành công",
                 categoryService.archive(categoryId));
+    }
+
+    private Sort categorySort() {
+        return Sort.by(Sort.Direction.ASC, "sortOrder")
+                .and(Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 }

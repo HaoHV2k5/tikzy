@@ -17,8 +17,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -108,6 +112,32 @@ class CategoryServiceImplTest {
                 () -> categoryService.create(request));
 
         assertEquals(ErrorCode.CATEGORY_ALREADY_EXISTS, exception.getErrorCode());
+    }
+
+    @Test
+    void getPublished_returnsOnlyPublishedCategories() {
+        Category category = category();
+        category.setStatus(CategoryStatus.PUBLISHED);
+        when(categoryRepository.findAllByStatus(eq(CategoryStatus.PUBLISHED), any()))
+                .thenReturn(new PageImpl<>(List.of(category)));
+
+        Page<CategoryResponse> result = categoryService.getPublished(PageRequest.of(0, 20));
+
+        assertEquals(1, result.getContent().size());
+        assertEquals(CategoryStatus.PUBLISHED, result.getContent().get(0).getStatus());
+        verify(categoryRepository).findAllByStatus(eq(CategoryStatus.PUBLISHED), any());
+    }
+
+    @Test
+    void getPublishedById_draftCategory_throwsNotFound() {
+        UUID categoryId = UUID.randomUUID();
+        when(categoryRepository.findById(categoryId)).thenReturn(java.util.Optional.of(category()));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> categoryService.getPublishedById(categoryId));
+
+        assertEquals(ErrorCode.CATEGORY_NOT_FOUND, exception.getErrorCode());
     }
 
     @Test

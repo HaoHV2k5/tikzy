@@ -22,3 +22,8 @@ tikzy:
     admin:
       enabled: true
       password: ${TIKZY_SEED_ADMIN_PASSWORD:Admin@123456}
+    events:
+      enabled: true
+    organizer:
+      email: magicmath2k5@gmail.com
+      password: ${TIKZY_SEED_ORGANIZER_PASSWORD:Organizer@123456}
