@@ -35,6 +35,7 @@ Follow this sequence when the user asks to commit or push:
    - `git diff --cached --check`
 7. Run the relevant verification command before committing.
 8. Create a new commit that follows Conventional Commits. Do not amend commits unless the user explicitly asks.
+   - Attribute commits and pull requests only to the human user. Never add `Co-authored-by`, author, or contributor metadata for Cursor, an AI agent, or an automated assistant.
 9. Push the verified topic branch to its configured remote, normally `origin`:
    - `git push -u origin <topic-branch>` for the first push
    - `git push origin <topic-branch>` for later pushes

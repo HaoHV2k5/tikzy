@@ -1,8 +1,11 @@
 package com.tikzy.event.entity;
 
 import com.tikzy.common.entity.BaseEntity;
+import com.tikzy.event.enums.CategoryStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +25,9 @@ public class Category extends BaseEntity {
     @Column(name = "name", nullable = false, length = 100)
     private String name; // Âm nhạc, Sân khấu, Thể thao...
 
+    @Column(name = "normalized_name", nullable = false, length = 100)
+    private String normalizedName;
+
     @Column(name = "slug", nullable = false, unique = true, length = 100)
     private String slug;
 
@@ -33,6 +39,7 @@ public class Category extends BaseEntity {
     private Integer sortOrder = 0;
 
     @Builder.Default
-    @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private CategoryStatus status = CategoryStatus.DRAFT;
 }
