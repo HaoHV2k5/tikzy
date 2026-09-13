@@ -44,6 +44,16 @@ Follow this sequence when the user asks to commit or push:
 
 Do not force-push. Do not use destructive commands such as `git reset --hard` or `git checkout --` unless the user explicitly approves them. Push only when the user explicitly requests a push.
 
+## Branch Discipline
+
+Each branch must have a single, clear purpose reflected by its name. Follow these rules:
+
+1. **One feature or fix per branch.** Do not mix unrelated changes into the same branch. For example, a backend feature and an observability fix must live on separate branches.
+2. **Branch name must match content.** All commits on a branch must relate to the purpose described by the branch name. A branch named `feat/showtime-management` must not contain observability or CI changes.
+3. **Before committing, verify branch fit.** Compare the changes being staged against the current branch name. If the changes do not belong to the branch's purpose, create a new topic branch for them instead of committing to the current branch.
+4. **Ask the user when in doubt.** If the working tree contains a mix of related and unrelated changes, list them and ask the user which branch each group should go to before staging anything.
+5. **Never bundle for convenience.** Even if multiple changes are ready at the same time, commit and push each group on its own dedicated branch.
+
 ## Conventional Commits
 
 Use this format:
