@@ -53,6 +53,7 @@ public enum ErrorCode {
     INVALID_CATEGORY_DATA(2012, "Thông tin danh mục không hợp lệ", HttpStatus.BAD_REQUEST),
     INVALID_EVENT_STATUS(2013, "Trạng thái sự kiện không hợp lệ", HttpStatus.CONFLICT),
     INVALID_EVENT_DATA(2014, "Thông tin sự kiện không hợp lệ", HttpStatus.BAD_REQUEST),
+    INVALID_SHOW_TIME_DATA(2015, "Thông tin suất diễn không hợp lệ", HttpStatus.BAD_REQUEST),
 
     // Ticket / Inventory 3xxx
     TICKET_TYPE_NOT_FOUND(3001, "Không tìm thấy hạng vé", HttpStatus.NOT_FOUND),
