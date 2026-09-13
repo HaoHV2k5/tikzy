@@ -16,14 +16,17 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -94,6 +97,57 @@ class CategoryControllerTest {
                 .andExpect(jsonPath("$.code").value(1403));
 
         verify(categoryService, never()).create(any());
+    }
+
+    @Test
+    void getPublished_asAnonymous_returnsCategories() throws Exception {
+        CategoryResponse response = CategoryResponse.builder()
+                .id(UUID.randomUUID())
+                .name("Triển lãm")
+                .slug("trien-lam")
+                .sortOrder(0)
+                .status(CategoryStatus.PUBLISHED)
+                .build();
+        when(categoryService.getPublished(any())).thenReturn(new PageImpl<>(List.of(response)));
+
+        mockMvc.perform(get("/api/v1/categories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].name").value("Triển lãm"))
+                .andExpect(jsonPath("$.data[0].status").value("PUBLISHED"));
+
+        verify(categoryService).getPublished(any());
+    }
+
+    @Test
+    void getPublishedById_asAnonymous_returnsCategory() throws Exception {
+        UUID categoryId = UUID.randomUUID();
+        CategoryResponse response = CategoryResponse.builder()
+                .id(categoryId)
+                .name("Triển lãm")
+                .slug("trien-lam")
+                .sortOrder(0)
+                .status(CategoryStatus.PUBLISHED)
+                .build();
+        when(categoryService.getPublishedById(categoryId)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/categories/{categoryId}", categoryId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(categoryId.toString()))
+                .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+
+        verify(categoryService).getPublishedById(categoryId);
+    }
+
+    @Test
+    @WithMockUser(roles = "CUSTOMER")
+    void getAll_asCustomer_returnsForbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/categories"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1403));
+
+        verify(categoryService, never()).getAll(any(), any());
     }
 
     @Test

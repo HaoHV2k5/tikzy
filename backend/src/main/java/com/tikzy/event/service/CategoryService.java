@@ -14,7 +14,11 @@ public interface CategoryService {
 
     Page<CategoryResponse> getAll(String status, Pageable pageable);
 
+    Page<CategoryResponse> getPublished(Pageable pageable);
+
     CategoryResponse getById(UUID categoryId);
+
+    CategoryResponse getPublishedById(UUID categoryId);
 
     CategoryResponse update(UUID categoryId, UpdateCategoryRequest request);
 
