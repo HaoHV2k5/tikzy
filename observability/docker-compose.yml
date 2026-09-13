@@ -48,8 +48,14 @@ services:
     networks:
       - tikzy
 
+  redis:
+    ports:
+      - "6379:6379"
+
   alloy:
     image: grafana/alloy:latest
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - run
       - /etc/alloy/config.alloy
