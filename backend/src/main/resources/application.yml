@@ -116,6 +116,12 @@ tikzy:
       email: ${TIKZY_SEED_ADMIN_EMAIL:${ADMIN_EMAIL:admin@tikzy.local}}
       password: ${TIKZY_SEED_ADMIN_PASSWORD:}
       full-name: Tikzy Administrator
+    events:
+      enabled: false
+    organizer:
+      email: ${TIKZY_SEED_ORGANIZER_EMAIL:magicmath2k5@gmail.com}
+      password: ${TIKZY_SEED_ORGANIZER_PASSWORD:}
+      full-name: Ban tổ chức Tikzy
 
 # ===== Logging =====
 logging:

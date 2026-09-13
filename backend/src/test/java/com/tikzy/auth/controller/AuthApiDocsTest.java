@@ -16,7 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Kiểm tra endpoint OpenAPI docs render được sau khi nâng springdoc version —
  * ngăn regression NoSuchMethodError giữa springdoc và Spring Framework ví dụ như 2.6.0.
  */
-@SpringBootTest(properties = "tikzy.seed.admin.enabled=false")
+@SpringBootTest(properties = {
+        "tikzy.seed.admin.enabled=false",
+        "tikzy.seed.events.enabled=false"
+})
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
 class AuthApiDocsTest {
