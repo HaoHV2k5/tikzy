@@ -8,11 +8,13 @@ import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
 import com.tikzy.event.entity.Category;
 import com.tikzy.event.entity.Event;
+import com.tikzy.event.entity.ShowTime;
 import com.tikzy.event.enums.CategoryStatus;
 import com.tikzy.event.enums.EventStatus;
 import com.tikzy.event.enums.RefundPolicy;
 import com.tikzy.event.repository.CategoryRepository;
 import com.tikzy.event.repository.EventRepository;
+import com.tikzy.event.repository.ShowTimeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 
@@ -40,6 +43,7 @@ public class EventDemoSeeder implements ApplicationRunner {
     private final RoleRepository roleRepository;
     private final CategoryRepository categoryRepository;
     private final EventRepository eventRepository;
+    private final ShowTimeRepository showTimeRepository;
     private final PasswordEncoder passwordEncoder;
     private final String email;
     private final String password;
@@ -50,6 +54,7 @@ public class EventDemoSeeder implements ApplicationRunner {
             RoleRepository roleRepository,
             CategoryRepository categoryRepository,
             EventRepository eventRepository,
+            ShowTimeRepository showTimeRepository,
             PasswordEncoder passwordEncoder,
             @Value("${tikzy.seed.organizer.email}") String email,
             @Value("${tikzy.seed.organizer.password}") String password,
@@ -58,6 +63,7 @@ public class EventDemoSeeder implements ApplicationRunner {
         this.roleRepository = roleRepository;
         this.categoryRepository = categoryRepository;
         this.eventRepository = eventRepository;
+        this.showTimeRepository = showTimeRepository;
         this.passwordEncoder = passwordEncoder;
         this.email = email;
         this.password = password;
@@ -73,35 +79,63 @@ public class EventDemoSeeder implements ApplicationRunner {
         }
 
         User organizer = resolveOrganizer(normalizedEmail);
-        int created = 0;
+        int createdEvents = 0;
+        int createdShowTimes = 0;
         for (SeedEvent seed : seedEvents()) {
-            if (eventRepository.existsByOrganizerIdAndTitle(organizer.getId(), seed.title())) {
-                continue;
-            }
-            Category category = categoryRepository.findBySlug(seed.categorySlug())
-                    .filter(item -> item.getStatus() == CategoryStatus.PUBLISHED)
+            Event event = eventRepository
+                    .findByOrganizerIdAndTitle(organizer.getId(), seed.title())
                     .orElse(null);
-            if (category == null) {
-                log.warn("Bỏ qua seed sự kiện '{}' vì không có danh mục published '{}'",
-                        seed.title(),
-                        seed.categorySlug());
+            if (event == null) {
+                Category category = categoryRepository.findBySlug(seed.categorySlug())
+                        .filter(item -> item.getStatus() == CategoryStatus.PUBLISHED)
+                        .orElse(null);
+                if (category == null) {
+                    log.warn("Bỏ qua seed sự kiện '{}' vì không có danh mục published '{}'",
+                            seed.title(),
+                            seed.categorySlug());
+                    continue;
+                }
+                event = eventRepository.save(Event.builder()
+                        .organizer(organizer)
+                        .category(category)
+                        .title(seed.title())
+                        .description(seed.description())
+                        .venueName(seed.venueName())
+                        .venueAddress(seed.venueAddress())
+                        .status(EventStatus.DRAFT)
+                        .refundPolicy(seed.refundPolicy())
+                        .refundDeadlineDays(seed.refundDeadlineDays())
+                        .refundFeePercentage(seed.refundFeePercentage())
+                        .build());
+                createdEvents++;
+            }
+            createdShowTimes += seedShowTimes(event, seed.showTimes());
+        }
+        log.info(
+                "Seeded {} demo events and {} demo show times for {}",
+                createdEvents,
+                createdShowTimes,
+                normalizedEmail);
+    }
+
+    private int seedShowTimes(Event event, List<SeedShowTime> showTimes) {
+        int created = 0;
+        for (SeedShowTime slot : showTimes) {
+            if (showTimeRepository.existsByEventIdAndStartTimeAndEndTime(
+                    event.getId(),
+                    slot.startTime(),
+                    slot.endTime())) {
                 continue;
             }
-            eventRepository.save(Event.builder()
-                    .organizer(organizer)
-                    .category(category)
-                    .title(seed.title())
-                    .description(seed.description())
-                    .venueName(seed.venueName())
-                    .venueAddress(seed.venueAddress())
-                    .status(EventStatus.DRAFT)
-                    .refundPolicy(seed.refundPolicy())
-                    .refundDeadlineDays(seed.refundDeadlineDays())
-                    .refundFeePercentage(seed.refundFeePercentage())
+            showTimeRepository.save(ShowTime.builder()
+                    .event(event)
+                    .startTime(slot.startTime())
+                    .endTime(slot.endTime())
+                    .isActive(true)
                     .build());
             created++;
         }
-        log.info("Seeded {} demo events for {}", created, normalizedEmail);
+        return created;
     }
 
     private User resolveOrganizer(String normalizedEmail) {
@@ -147,7 +181,11 @@ public class EventDemoSeeder implements ApplicationRunner {
                         "Trần Cao Vân, Quận 1, TP.HCM",
                         RefundPolicy.NO_REFUND,
                         null,
-                        null),
+                        null,
+                        List.of(
+                                showTime(2026, 10, 15, 19, 0, 22, 0),
+                                showTime(2026, 10, 16, 19, 0, 22, 0),
+                                showTime(2026, 10, 17, 20, 0, 23, 0))),
                 new SeedEvent(
                         "san-khau",
                         "Kịch Hamlet",
@@ -156,7 +194,11 @@ public class EventDemoSeeder implements ApplicationRunner {
                         "7 Công Trường Lam Sơn, Quận 1, TP.HCM",
                         RefundPolicy.ALLOW_REFUND,
                         7,
-                        new BigDecimal("10.00")),
+                        new BigDecimal("10.00"),
+                        List.of(
+                                showTime(2026, 11, 1, 19, 30, 22, 0),
+                                showTime(2026, 11, 2, 15, 0, 17, 30),
+                                showTime(2026, 11, 2, 19, 30, 22, 0))),
                 new SeedEvent(
                         "the-thao",
                         "Giải chạy đêm Sài Gòn",
@@ -165,7 +207,10 @@ public class EventDemoSeeder implements ApplicationRunner {
                         "Nguyễn Huệ, Quận 1, TP.HCM",
                         RefundPolicy.NO_REFUND,
                         null,
-                        null),
+                        null,
+                        List.of(
+                                showTime(2026, 11, 15, 18, 0, 21, 0),
+                                showTime(2026, 11, 16, 5, 0, 8, 0))),
                 new SeedEvent(
                         "hoi-thao",
                         "Hội thảo AI 2026",
@@ -174,7 +219,11 @@ public class EventDemoSeeder implements ApplicationRunner {
                         "8 Nguyễn Bỉnh Khiêm, Quận 1, TP.HCM",
                         RefundPolicy.ALLOW_REFUND,
                         3,
-                        new BigDecimal("5.00")),
+                        new BigDecimal("5.00"),
+                        List.of(
+                                showTime(2026, 10, 20, 8, 30, 12, 0),
+                                showTime(2026, 10, 20, 13, 30, 17, 0),
+                                showTime(2026, 10, 21, 9, 0, 12, 0))),
                 new SeedEvent(
                         "le-hoi",
                         "Lễ hội Trung thu",
@@ -183,7 +232,23 @@ public class EventDemoSeeder implements ApplicationRunner {
                         "Đường sách Nguyễn Văn Bình, Quận 1, TP.HCM",
                         RefundPolicy.NO_REFUND,
                         null,
-                        null));
+                        null,
+                        List.of(
+                                showTime(2026, 10, 6, 17, 0, 21, 0),
+                                showTime(2026, 10, 7, 17, 0, 21, 0))));
+    }
+
+    private SeedShowTime showTime(
+            int year,
+            int month,
+            int day,
+            int startHour,
+            int startMinute,
+            int endHour,
+            int endMinute) {
+        return new SeedShowTime(
+                LocalDateTime.of(year, month, day, startHour, startMinute),
+                LocalDateTime.of(year, month, day, endHour, endMinute));
     }
 
     private String resolveFullName() {
@@ -208,6 +273,10 @@ public class EventDemoSeeder implements ApplicationRunner {
             String venueAddress,
             RefundPolicy refundPolicy,
             Integer refundDeadlineDays,
-            BigDecimal refundFeePercentage) {
+            BigDecimal refundFeePercentage,
+            List<SeedShowTime> showTimes) {
+    }
+
+    private record SeedShowTime(LocalDateTime startTime, LocalDateTime endTime) {
     }
 }
