@@ -30,5 +30,7 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
 
     boolean existsByOrganizerIdAndTitle(UUID organizerId, String title);
 
+    Optional<Event> findByOrganizerIdAndTitle(UUID organizerId, String title);
+
     Page<Event> findAllByCategoryIdAndStatus(UUID categoryId, EventStatus status, Pageable pageable);
 }
