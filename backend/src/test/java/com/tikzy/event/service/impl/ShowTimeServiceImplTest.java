@@ -15,6 +15,7 @@ import com.tikzy.event.enums.RefundPolicy;
 import com.tikzy.event.mapper.ShowTimeMapper;
 import com.tikzy.event.repository.EventRepository;
 import com.tikzy.event.repository.ShowTimeRepository;
+import com.tikzy.ticket.service.InventoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,6 +51,8 @@ class ShowTimeServiceImplTest {
     private ShowTimeRepository showTimeRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private InventoryService inventoryService;
 
     private final ShowTimeMapper showTimeMapper = Mappers.getMapper(ShowTimeMapper.class);
     private ShowTimeServiceImpl showTimeService;
@@ -60,7 +63,8 @@ class ShowTimeServiceImplTest {
                 eventRepository,
                 showTimeRepository,
                 userRepository,
-                showTimeMapper);
+                showTimeMapper,
+                inventoryService);
     }
 
     @Test
@@ -91,6 +95,7 @@ class ShowTimeServiceImplTest {
         verify(showTimeRepository).save(captor.capture());
         assertEquals(event, captor.getValue().getEvent());
         assertTrue(captor.getValue().getIsActive());
+        verify(inventoryService).ensurePairsForShowTime(captor.getValue());
     }
 
     @Test

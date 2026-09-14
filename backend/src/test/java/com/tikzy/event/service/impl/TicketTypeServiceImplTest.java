@@ -15,6 +15,7 @@ import com.tikzy.event.enums.RefundPolicy;
 import com.tikzy.event.mapper.TicketTypeMapper;
 import com.tikzy.event.repository.EventRepository;
 import com.tikzy.event.repository.TicketTypeRepository;
+import com.tikzy.ticket.service.InventoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +52,8 @@ class TicketTypeServiceImplTest {
     private TicketTypeRepository ticketTypeRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private InventoryService inventoryService;
 
     private final TicketTypeMapper ticketTypeMapper = Mappers.getMapper(TicketTypeMapper.class);
     private TicketTypeServiceImpl ticketTypeService;
@@ -61,7 +64,8 @@ class TicketTypeServiceImplTest {
                 eventRepository,
                 ticketTypeRepository,
                 userRepository,
-                ticketTypeMapper);
+                ticketTypeMapper,
+                inventoryService);
     }
 
     @Test
@@ -93,6 +97,7 @@ class TicketTypeServiceImplTest {
         verify(ticketTypeRepository).save(captor.capture());
         assertEquals(event, captor.getValue().getEvent());
         assertTrue(captor.getValue().getIsActive());
+        verify(inventoryService).ensurePairsForTicketType(captor.getValue());
     }
 
     @Test

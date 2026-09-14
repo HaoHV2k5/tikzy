@@ -14,6 +14,7 @@ import com.tikzy.event.mapper.TicketTypeMapper;
 import com.tikzy.event.repository.EventRepository;
 import com.tikzy.event.repository.TicketTypeRepository;
 import com.tikzy.event.service.TicketTypeService;
+import com.tikzy.ticket.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,6 +36,7 @@ public class TicketTypeServiceImpl implements TicketTypeService {
     private final TicketTypeRepository ticketTypeRepository;
     private final UserRepository userRepository;
     private final TicketTypeMapper ticketTypeMapper;
+    private final InventoryService inventoryService;
 
     @Override
     @Transactional
@@ -53,7 +55,9 @@ public class TicketTypeServiceImpl implements TicketTypeService {
         ticketType.setName(name);
         ticketType.setMaxPerOrder(maxPerOrder);
         ticketType.setIsActive(true);
-        return ticketTypeMapper.toResponse(ticketTypeRepository.save(ticketType));
+        TicketType saved = ticketTypeRepository.save(ticketType);
+        inventoryService.ensurePairsForTicketType(saved);
+        return ticketTypeMapper.toResponse(saved);
     }
 
     @Override
