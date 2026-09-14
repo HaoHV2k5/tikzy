@@ -1,6 +1,7 @@
 package com.tikzy.event.controller;
 
 import com.tikzy.common.response.ApiResponse;
+import com.tikzy.event.dto.request.SearchEventsRequest;
 import com.tikzy.event.dto.response.EventResponse;
 import com.tikzy.event.dto.response.PublicEventDetailResponse;
 import com.tikzy.event.service.EventService;
@@ -36,7 +37,17 @@ public class PublicEventController {
                 "Lấy danh sách sự kiện thành công",
                 eventService.getPublished(
                         categoryId,
-                        PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))));
+                        eventPageRequest(page, size)));
+    }
+
+    @GetMapping("/search")
+    public ApiResponse<List<EventResponse>> search(
+            SearchEventsRequest request,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return ApiResponse.page(
+                "Tìm kiếm sự kiện thành công",
+                eventService.searchPublished(request, eventPageRequest(page, size)));
     }
 
     @GetMapping("/{eventId}")
@@ -44,5 +55,9 @@ public class PublicEventController {
         return ApiResponse.ok(
                 "Lấy thông tin sự kiện thành công",
                 eventService.getPublishedById(eventId));
+    }
+
+    private PageRequest eventPageRequest(int page, int size) {
+        return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 }

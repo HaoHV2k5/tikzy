@@ -1,6 +1,7 @@
 package com.tikzy.event.service;
 
 import com.tikzy.event.dto.request.CreateEventRequest;
+import com.tikzy.event.dto.request.SearchEventsRequest;
 import com.tikzy.event.dto.request.UpdateEventRequest;
 import com.tikzy.event.dto.response.EventResponse;
 import com.tikzy.event.dto.response.PublicEventDetailResponse;
@@ -33,6 +34,8 @@ public interface EventService {
     EventResponse publish(String organizerEmail, UUID eventId);
 
     Page<EventResponse> getPublished(UUID categoryId, Pageable pageable);
+
+    Page<EventResponse> searchPublished(SearchEventsRequest request, Pageable pageable);
 
     PublicEventDetailResponse getPublishedById(UUID eventId);
 }
