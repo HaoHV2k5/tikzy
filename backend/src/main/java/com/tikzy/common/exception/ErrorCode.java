@@ -62,6 +62,7 @@ public enum ErrorCode {
     TICKET_NOT_FOUND(3004, "Không tìm thấy vé", HttpStatus.NOT_FOUND),
     TICKET_ALREADY_CHECKED_IN(3005, "Vé đã được check-in", HttpStatus.CONFLICT),
     TICKET_INVALID_QR(3006, "Mã QR không hợp lệ hoặc đã bị giả mạo", HttpStatus.BAD_REQUEST),
+    INVALID_TICKET_TYPE_DATA(3007, "Thông tin hạng vé không hợp lệ", HttpStatus.BAD_REQUEST),
 
     // Order / Promotion 4xxx
     ORDER_NOT_FOUND(4001, "Không tìm thấy đơn hàng", HttpStatus.NOT_FOUND),
