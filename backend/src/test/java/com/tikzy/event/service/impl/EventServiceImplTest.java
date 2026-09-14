@@ -8,6 +8,7 @@ import com.tikzy.common.exception.ErrorCode;
 import com.tikzy.common.storage.ImageStorageService;
 import com.tikzy.common.storage.StoredImage;
 import com.tikzy.event.dto.request.CreateEventRequest;
+import com.tikzy.event.dto.request.SearchEventsRequest;
 import com.tikzy.event.dto.request.UpdateEventRequest;
 import com.tikzy.event.dto.response.EventResponse;
 import com.tikzy.event.dto.response.PublicEventDetailResponse;
@@ -38,7 +39,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -526,6 +530,106 @@ class EventServiceImplTest {
 
         assertEquals(ErrorCode.CATEGORY_NOT_FOUND, exception.getErrorCode());
         verify(eventRepository, never()).findAllByCategoryIdAndStatus(any(), any(), any());
+    }
+
+    @Test
+    void searchPublished_blankFilters_returnsPublishedEventsWithoutOrganizerEmail() {
+        Event event = draftEvent(organizer(), publishedCategory());
+        event.setStatus(EventStatus.PUBLISHED);
+        when(eventRepository.searchPublished(
+                eq(EventStatus.PUBLISHED),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                any())).thenReturn(new PageImpl<>(List.of(event)));
+
+        Page<EventResponse> page = eventService.searchPublished(new SearchEventsRequest(), PageRequest.of(0, 20));
+
+        assertEquals(1, page.getContent().size());
+        assertEquals(event.getTitle(), page.getContent().getFirst().getTitle());
+        assertNull(page.getContent().getFirst().getOrganizerEmail());
+    }
+
+    @Test
+    void searchPublished_normalizesKeywordLocationAndDateRange() {
+        Event event = draftEvent(organizer(), publishedCategory());
+        event.setStatus(EventStatus.PUBLISHED);
+        SearchEventsRequest request = new SearchEventsRequest();
+        request.setKeyword("  Hòa Nhạc  ");
+        request.setLocation("  Hà Nội  ");
+        request.setFrom(LocalDate.of(2026, 10, 1));
+        request.setTo(LocalDate.of(2026, 10, 31));
+        request.setMinPrice(new BigDecimal("100000"));
+        request.setMaxPrice(new BigDecimal("2000000"));
+        when(eventRepository.searchPublished(
+                eq(EventStatus.PUBLISHED),
+                eq("%hòa nhạc%"),
+                eq("%hà nội%"),
+                eq(LocalDate.of(2026, 10, 1).atStartOfDay()),
+                eq(LocalDate.of(2026, 10, 31).atTime(LocalTime.MAX)),
+                eq(new BigDecimal("100000")),
+                eq(new BigDecimal("2000000")),
+                any())).thenReturn(new PageImpl<>(List.of(event)));
+
+        Page<EventResponse> page = eventService.searchPublished(request, PageRequest.of(0, 20));
+
+        assertEquals(1, page.getContent().size());
+        verify(eventRepository).searchPublished(
+                eq(EventStatus.PUBLISHED),
+                eq("%hòa nhạc%"),
+                eq("%hà nội%"),
+                eq(LocalDate.of(2026, 10, 1).atStartOfDay()),
+                eq(LocalDate.of(2026, 10, 31).atTime(LocalTime.MAX)),
+                eq(new BigDecimal("100000")),
+                eq(new BigDecimal("2000000")),
+                any());
+    }
+
+    @Test
+    void searchPublished_fromAfterTo_throwsInvalidData() {
+        SearchEventsRequest request = new SearchEventsRequest();
+        request.setFrom(LocalDate.of(2026, 10, 31));
+        request.setTo(LocalDate.of(2026, 10, 1));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.searchPublished(request, PageRequest.of(0, 20)));
+
+        assertEquals(ErrorCode.INVALID_EVENT_DATA, exception.getErrorCode());
+        verify(eventRepository, never()).searchPublished(
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void searchPublished_minPriceGreaterThanMax_throwsInvalidData() {
+        SearchEventsRequest request = new SearchEventsRequest();
+        request.setMinPrice(new BigDecimal("2000000"));
+        request.setMaxPrice(new BigDecimal("100000"));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.searchPublished(request, PageRequest.of(0, 20)));
+
+        assertEquals(ErrorCode.INVALID_EVENT_DATA, exception.getErrorCode());
+        verify(eventRepository, never()).searchPublished(
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void searchPublished_negativeMinPrice_throwsInvalidData() {
+        SearchEventsRequest request = new SearchEventsRequest();
+        request.setMinPrice(new BigDecimal("-1"));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.searchPublished(request, PageRequest.of(0, 20)));
+
+        assertEquals(ErrorCode.INVALID_EVENT_DATA, exception.getErrorCode());
+        verify(eventRepository, never()).searchPublished(
+                any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

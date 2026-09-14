@@ -7,6 +7,7 @@ import com.tikzy.common.exception.ErrorCode;
 import com.tikzy.common.storage.ImageStorageService;
 import com.tikzy.common.storage.StoredImage;
 import com.tikzy.event.dto.request.CreateEventRequest;
+import com.tikzy.event.dto.request.SearchEventsRequest;
 import com.tikzy.event.dto.request.UpdateEventRequest;
 import com.tikzy.event.dto.response.EventResponse;
 import com.tikzy.event.dto.response.PublicEventDetailResponse;
@@ -38,6 +39,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -231,6 +234,29 @@ public class EventServiceImpl implements EventService {
         return eventRepository.findAllByCategoryIdAndStatus(
                         category.getId(),
                         EventStatus.PUBLISHED,
+                        pageable)
+                .map(eventMapper::toPublicResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EventResponse> searchPublished(SearchEventsRequest request, Pageable pageable) {
+        SearchEventsRequest query = request == null ? new SearchEventsRequest() : request;
+        String keyword = containsPattern(query.getKeyword());
+        String location = containsPattern(query.getLocation());
+        LocalDate from = query.getFrom();
+        LocalDate to = query.getTo();
+        BigDecimal minPrice = query.getMinPrice();
+        BigDecimal maxPrice = query.getMaxPrice();
+        validateSearchRange(from, to, minPrice, maxPrice);
+        return eventRepository.searchPublished(
+                        EventStatus.PUBLISHED,
+                        keyword,
+                        location,
+                        from == null ? null : from.atStartOfDay(),
+                        to == null ? null : to.atTime(LocalTime.MAX),
+                        minPrice,
+                        maxPrice,
                         pageable)
                 .map(eventMapper::toPublicResponse);
     }
@@ -450,5 +476,39 @@ public class EventServiceImpl implements EventService {
             return;
         }
         event.setThumbnailUrl(url);
+    }
+
+    private void validateSearchRange(
+            LocalDate from,
+            LocalDate to,
+            BigDecimal minPrice,
+            BigDecimal maxPrice) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new AppException(
+                    ErrorCode.INVALID_EVENT_DATA,
+                    "Thời gian bắt đầu không được sau thời gian kết thúc");
+        }
+        if (minPrice != null && minPrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new AppException(
+                    ErrorCode.INVALID_EVENT_DATA,
+                    "Mức giá tối thiểu không được âm");
+        }
+        if (maxPrice != null && maxPrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new AppException(
+                    ErrorCode.INVALID_EVENT_DATA,
+                    "Mức giá tối đa không được âm");
+        }
+        if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
+            throw new AppException(
+                    ErrorCode.INVALID_EVENT_DATA,
+                    "Mức giá tối thiểu không được lớn hơn mức giá tối đa");
+        }
+    }
+
+    private String containsPattern(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return "%" + value.trim().toLowerCase(Locale.ROOT) + "%";
     }
 }
