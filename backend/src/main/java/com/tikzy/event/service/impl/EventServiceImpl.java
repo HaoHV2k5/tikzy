@@ -9,8 +9,13 @@ import com.tikzy.common.storage.StoredImage;
 import com.tikzy.event.dto.request.CreateEventRequest;
 import com.tikzy.event.dto.request.UpdateEventRequest;
 import com.tikzy.event.dto.response.EventResponse;
+import com.tikzy.event.dto.response.PublicEventDetailResponse;
+import com.tikzy.event.dto.response.PublicShowTimeResponse;
+import com.tikzy.event.dto.response.PublicTicketOfferResponse;
 import com.tikzy.event.entity.Category;
 import com.tikzy.event.entity.Event;
+import com.tikzy.event.entity.ShowTime;
+import com.tikzy.event.entity.TicketType;
 import com.tikzy.event.enums.CategoryStatus;
 import com.tikzy.event.enums.EventImageType;
 import com.tikzy.event.enums.EventStatus;
@@ -18,7 +23,11 @@ import com.tikzy.event.enums.RefundPolicy;
 import com.tikzy.event.mapper.EventMapper;
 import com.tikzy.event.repository.CategoryRepository;
 import com.tikzy.event.repository.EventRepository;
+import com.tikzy.event.repository.ShowTimeRepository;
+import com.tikzy.event.repository.TicketTypeRepository;
 import com.tikzy.event.service.EventService;
+import com.tikzy.ticket.entity.ShowTimeTicketInventory;
+import com.tikzy.ticket.repository.ShowTimeTicketInventoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,9 +38,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -51,6 +65,9 @@ public class EventServiceImpl implements EventService {
     private final UserRepository userRepository;
     private final EventMapper eventMapper;
     private final ImageStorageService imageStorageService;
+    private final ShowTimeRepository showTimeRepository;
+    private final TicketTypeRepository ticketTypeRepository;
+    private final ShowTimeTicketInventoryRepository inventoryRepository;
 
     @Override
     @Transactional
@@ -189,6 +206,45 @@ public class EventServiceImpl implements EventService {
         return response;
     }
 
+    @Override
+    @Transactional
+    public EventResponse publish(String organizerEmail, UUID eventId) {
+        Event event = findOwnEvent(organizerEmail, eventId);
+        requireDraft(event);
+        requireReadyToPublish(event.getId());
+        event.setStatus(EventStatus.PUBLISHED);
+        return eventMapper.toResponse(eventRepository.save(event));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EventResponse> getPublished(UUID categoryId, Pageable pageable) {
+        if (categoryId == null) {
+            return eventRepository.findAllByStatus(EventStatus.PUBLISHED, pageable)
+                    .map(eventMapper::toPublicResponse);
+        }
+        Category category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
+        if (category.getStatus() != CategoryStatus.PUBLISHED) {
+            throw new AppException(ErrorCode.CATEGORY_NOT_FOUND);
+        }
+        return eventRepository.findAllByCategoryIdAndStatus(
+                        category.getId(),
+                        EventStatus.PUBLISHED,
+                        pageable)
+                .map(eventMapper::toPublicResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PublicEventDetailResponse getPublishedById(UUID eventId) {
+        Event event = eventRepository.findByIdAndStatus(eventId, EventStatus.PUBLISHED)
+                .orElseThrow(() -> new AppException(ErrorCode.EVENT_NOT_FOUND));
+        return PublicEventDetailResponse.from(
+                eventMapper.toPublicResponse(event),
+                toPublicShowTimes(event.getId()));
+    }
+
     private Event findOwnEvent(String organizerEmail, UUID eventId) {
         User organizer = findUser(organizerEmail);
         return eventRepository.findByIdAndOrganizerId(eventId, organizer.getId())
@@ -218,6 +274,82 @@ public class EventServiceImpl implements EventService {
         if (event.getStatus() != EventStatus.DRAFT) {
             throw new AppException(ErrorCode.INVALID_EVENT_STATUS);
         }
+    }
+
+    private void requireReadyToPublish(UUID eventId) {
+        List<ShowTime> showTimes = showTimeRepository.findAllByEventIdAndIsActiveTrueOrderByStartTimeAsc(eventId);
+        if (showTimes.isEmpty()) {
+            throw new AppException(
+                    ErrorCode.INVALID_EVENT_DATA,
+                    "Sự kiện cần ít nhất một suất diễn đang hoạt động");
+        }
+        List<TicketType> ticketTypes = ticketTypeRepository.findAllByEventIdAndIsActiveTrue(eventId);
+        if (ticketTypes.isEmpty()) {
+            throw new AppException(
+                    ErrorCode.INVALID_EVENT_DATA,
+                    "Sự kiện cần ít nhất một hạng vé đang hoạt động");
+        }
+        Map<String, ShowTimeTicketInventory> inventories = inventoriesByPair(eventId);
+        for (ShowTime showTime : showTimes) {
+            for (TicketType ticketType : ticketTypes) {
+                if (!inventories.containsKey(inventoryKey(showTime.getId(), ticketType.getId()))) {
+                    throw new AppException(
+                            ErrorCode.INVALID_EVENT_DATA,
+                            "Sự kiện cần khởi tạo tồn kho cho mọi suất diễn và hạng vé");
+                }
+            }
+        }
+    }
+
+    private List<PublicShowTimeResponse> toPublicShowTimes(UUID eventId) {
+        List<ShowTime> showTimes = showTimeRepository.findAllByEventIdAndIsActiveTrueOrderByStartTimeAsc(eventId);
+        List<TicketType> ticketTypes = ticketTypeRepository.findAllByEventIdAndIsActiveTrue(eventId);
+        Map<String, ShowTimeTicketInventory> inventories = inventoriesByPair(eventId);
+        List<PublicShowTimeResponse> responses = new ArrayList<>();
+        for (ShowTime showTime : showTimes) {
+            List<PublicTicketOfferResponse> offers = new ArrayList<>();
+            for (TicketType ticketType : ticketTypes) {
+                ShowTimeTicketInventory inventory =
+                        inventories.get(inventoryKey(showTime.getId(), ticketType.getId()));
+                if (inventory == null) {
+                    continue;
+                }
+                offers.add(PublicTicketOfferResponse.builder()
+                        .ticketTypeId(ticketType.getId())
+                        .name(ticketType.getName())
+                        .price(ticketType.getPrice())
+                        .maxPerOrder(ticketType.getMaxPerOrder())
+                        .availableQuantity(availableQuantity(inventory))
+                        .build());
+            }
+            responses.add(PublicShowTimeResponse.builder()
+                    .id(showTime.getId())
+                    .startTime(showTime.getStartTime())
+                    .endTime(showTime.getEndTime())
+                    .ticketOffers(offers)
+                    .build());
+        }
+        return responses;
+    }
+
+    private Map<String, ShowTimeTicketInventory> inventoriesByPair(UUID eventId) {
+        return inventoryRepository.findAllByShowTimeEventId(eventId).stream()
+                .collect(Collectors.toMap(
+                        inventory -> inventoryKey(
+                                inventory.getShowTime().getId(),
+                                inventory.getTicketType().getId()),
+                        Function.identity(),
+                        (first, ignored) -> first));
+    }
+
+    private String inventoryKey(UUID showTimeId, UUID ticketTypeId) {
+        return showTimeId + ":" + ticketTypeId;
+    }
+
+    private int availableQuantity(ShowTimeTicketInventory inventory) {
+        int reserved = inventory.getReservedQuantity() == null ? 0 : inventory.getReservedQuantity();
+        int sold = inventory.getSoldQuantity() == null ? 0 : inventory.getSoldQuantity();
+        return Math.max(0, inventory.getTotalQuantity() - reserved - sold);
     }
 
     private void validateRefundPolicy(

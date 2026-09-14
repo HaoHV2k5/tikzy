@@ -10,14 +10,21 @@ import com.tikzy.common.storage.StoredImage;
 import com.tikzy.event.dto.request.CreateEventRequest;
 import com.tikzy.event.dto.request.UpdateEventRequest;
 import com.tikzy.event.dto.response.EventResponse;
+import com.tikzy.event.dto.response.PublicEventDetailResponse;
 import com.tikzy.event.entity.Category;
 import com.tikzy.event.entity.Event;
+import com.tikzy.event.entity.ShowTime;
+import com.tikzy.event.entity.TicketType;
 import com.tikzy.event.enums.CategoryStatus;
 import com.tikzy.event.enums.EventStatus;
 import com.tikzy.event.enums.RefundPolicy;
 import com.tikzy.event.mapper.EventMapper;
 import com.tikzy.event.repository.CategoryRepository;
 import com.tikzy.event.repository.EventRepository;
+import com.tikzy.event.repository.ShowTimeRepository;
+import com.tikzy.event.repository.TicketTypeRepository;
+import com.tikzy.ticket.entity.ShowTimeTicketInventory;
+import com.tikzy.ticket.repository.ShowTimeTicketInventoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,10 +32,14 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -52,6 +63,12 @@ class EventServiceImplTest {
     private UserRepository userRepository;
     @Mock
     private ImageStorageService imageStorageService;
+    @Mock
+    private ShowTimeRepository showTimeRepository;
+    @Mock
+    private TicketTypeRepository ticketTypeRepository;
+    @Mock
+    private ShowTimeTicketInventoryRepository inventoryRepository;
 
     private final EventMapper eventMapper = Mappers.getMapper(EventMapper.class);
     private EventServiceImpl eventService;
@@ -63,7 +80,10 @@ class EventServiceImplTest {
                 categoryRepository,
                 userRepository,
                 eventMapper,
-                imageStorageService);
+                imageStorageService,
+                showTimeRepository,
+                ticketTypeRepository,
+                inventoryRepository);
     }
 
     @Test
@@ -352,12 +372,246 @@ class EventServiceImplTest {
         assertEquals(ErrorCode.EVENT_NOT_FOUND, exception.getErrorCode());
     }
 
+    @Test
+    void publish_draftEventWithInventory_setsPublishedStatus() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        ShowTime showTime = showTime(event);
+        TicketType ticketType = ticketType(event);
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+        when(showTimeRepository.findAllByEventIdAndIsActiveTrueOrderByStartTimeAsc(event.getId()))
+                .thenReturn(List.of(showTime));
+        when(ticketTypeRepository.findAllByEventIdAndIsActiveTrue(event.getId()))
+                .thenReturn(List.of(ticketType));
+        when(inventoryRepository.findAllByShowTimeEventId(event.getId()))
+                .thenReturn(List.of(inventory(showTime, ticketType, 100, 10, 20)));
+        when(eventRepository.save(any(Event.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        EventResponse response = eventService.publish("organizer@example.com", event.getId());
+
+        assertEquals(EventStatus.PUBLISHED, response.getStatus());
+        ArgumentCaptor<Event> captor = ArgumentCaptor.forClass(Event.class);
+        verify(eventRepository).save(captor.capture());
+        assertEquals(EventStatus.PUBLISHED, captor.getValue().getStatus());
+    }
+
+    @Test
+    void publish_withoutShowTime_throwsInvalidData() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+        when(showTimeRepository.findAllByEventIdAndIsActiveTrueOrderByStartTimeAsc(event.getId()))
+                .thenReturn(List.of());
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.publish("organizer@example.com", event.getId()));
+
+        assertEquals(ErrorCode.INVALID_EVENT_DATA, exception.getErrorCode());
+        verify(eventRepository, never()).save(any(Event.class));
+    }
+
+    @Test
+    void publish_withoutTicketType_throwsInvalidData() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        ShowTime showTime = showTime(event);
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+        when(showTimeRepository.findAllByEventIdAndIsActiveTrueOrderByStartTimeAsc(event.getId()))
+                .thenReturn(List.of(showTime));
+        when(ticketTypeRepository.findAllByEventIdAndIsActiveTrue(event.getId()))
+                .thenReturn(List.of());
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.publish("organizer@example.com", event.getId()));
+
+        assertEquals(ErrorCode.INVALID_EVENT_DATA, exception.getErrorCode());
+        verify(eventRepository, never()).save(any(Event.class));
+    }
+
+    @Test
+    void publish_withoutInventory_throwsInvalidData() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        ShowTime showTime = showTime(event);
+        TicketType ticketType = ticketType(event);
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+        when(showTimeRepository.findAllByEventIdAndIsActiveTrueOrderByStartTimeAsc(event.getId()))
+                .thenReturn(List.of(showTime));
+        when(ticketTypeRepository.findAllByEventIdAndIsActiveTrue(event.getId()))
+                .thenReturn(List.of(ticketType));
+        when(inventoryRepository.findAllByShowTimeEventId(event.getId()))
+                .thenReturn(List.of());
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.publish("organizer@example.com", event.getId()));
+
+        assertEquals(ErrorCode.INVALID_EVENT_DATA, exception.getErrorCode());
+        verify(eventRepository, never()).save(any(Event.class));
+    }
+
+    @Test
+    void publish_publishedEvent_throwsInvalidStatus() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        event.setStatus(EventStatus.PUBLISHED);
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.publish("organizer@example.com", event.getId()));
+
+        assertEquals(ErrorCode.INVALID_EVENT_STATUS, exception.getErrorCode());
+        verify(eventRepository, never()).save(any(Event.class));
+    }
+
+    @Test
+    void getPublished_returnsOnlyPublishedEventsWithoutOrganizerEmail() {
+        Event event = draftEvent(organizer(), publishedCategory());
+        event.setStatus(EventStatus.PUBLISHED);
+        when(eventRepository.findAllByStatus(eq(EventStatus.PUBLISHED), any()))
+                .thenReturn(new PageImpl<>(List.of(event)));
+
+        Page<EventResponse> page = eventService.getPublished(null, PageRequest.of(0, 20));
+
+        assertEquals(1, page.getContent().size());
+        assertEquals(event.getTitle(), page.getContent().getFirst().getTitle());
+        assertEquals(EventStatus.PUBLISHED, page.getContent().getFirst().getStatus());
+        assertNull(page.getContent().getFirst().getOrganizerEmail());
+    }
+
+    @Test
+    void getPublished_byCategory_returnsMatchingPublishedEvents() {
+        Category category = publishedCategory();
+        Event event = draftEvent(organizer(), category);
+        event.setStatus(EventStatus.PUBLISHED);
+        when(categoryRepository.findById(category.getId())).thenReturn(Optional.of(category));
+        when(eventRepository.findAllByCategoryIdAndStatus(
+                eq(category.getId()),
+                eq(EventStatus.PUBLISHED),
+                any())).thenReturn(new PageImpl<>(List.of(event)));
+
+        Page<EventResponse> page = eventService.getPublished(category.getId(), PageRequest.of(0, 20));
+
+        assertEquals(1, page.getContent().size());
+        assertEquals(event.getTitle(), page.getContent().getFirst().getTitle());
+    }
+
+    @Test
+    void getPublished_unpublishedCategory_throwsNotFound() {
+        Category category = publishedCategory();
+        category.setStatus(CategoryStatus.DRAFT);
+        when(categoryRepository.findById(category.getId())).thenReturn(Optional.of(category));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.getPublished(category.getId(), PageRequest.of(0, 20)));
+
+        assertEquals(ErrorCode.CATEGORY_NOT_FOUND, exception.getErrorCode());
+        verify(eventRepository, never()).findAllByCategoryIdAndStatus(any(), any(), any());
+    }
+
+    @Test
+    void getPublishedById_returnsShowTimesAndRemainingInventory() {
+        Event event = draftEvent(organizer(), publishedCategory());
+        event.setStatus(EventStatus.PUBLISHED);
+        ShowTime showTime = showTime(event);
+        TicketType ticketType = ticketType(event);
+        when(eventRepository.findByIdAndStatus(event.getId(), EventStatus.PUBLISHED))
+                .thenReturn(Optional.of(event));
+        when(showTimeRepository.findAllByEventIdAndIsActiveTrueOrderByStartTimeAsc(event.getId()))
+                .thenReturn(List.of(showTime));
+        when(ticketTypeRepository.findAllByEventIdAndIsActiveTrue(event.getId()))
+                .thenReturn(List.of(ticketType));
+        when(inventoryRepository.findAllByShowTimeEventId(event.getId()))
+                .thenReturn(List.of(inventory(showTime, ticketType, 100, 10, 20)));
+
+        PublicEventDetailResponse response = eventService.getPublishedById(event.getId());
+
+        assertEquals(event.getTitle(), response.getTitle());
+        assertEquals(EventStatus.PUBLISHED, response.getStatus());
+        assertEquals(1, response.getShowTimes().size());
+        assertEquals(showTime.getId(), response.getShowTimes().getFirst().getId());
+        assertEquals(1, response.getShowTimes().getFirst().getTicketOffers().size());
+        assertEquals(70, response.getShowTimes().getFirst().getTicketOffers().getFirst().getAvailableQuantity());
+        assertEquals(ticketType.getId(), response.getShowTimes().getFirst().getTicketOffers().getFirst().getTicketTypeId());
+    }
+
+    @Test
+    void getPublishedById_draftEvent_throwsNotFound() {
+        when(eventRepository.findByIdAndStatus(any(), eq(EventStatus.PUBLISHED)))
+                .thenReturn(Optional.empty());
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.getPublishedById(UUID.randomUUID()));
+
+        assertEquals(ErrorCode.EVENT_NOT_FOUND, exception.getErrorCode());
+    }
+
     private CreateEventRequest createRequest(UUID categoryId) {
         CreateEventRequest request = new CreateEventRequest();
         request.setCategoryId(categoryId);
         request.setTitle("Hòa nhạc mùa hè");
         request.setVenueName("Nhà hát lớn");
         return request;
+    }
+
+    private ShowTime showTime(Event event) {
+        ShowTime showTime = ShowTime.builder()
+                .event(event)
+                .startTime(LocalDateTime.of(2026, 10, 15, 19, 0))
+                .endTime(LocalDateTime.of(2026, 10, 15, 22, 0))
+                .isActive(true)
+                .build();
+        showTime.setId(UUID.randomUUID());
+        return showTime;
+    }
+
+    private TicketType ticketType(Event event) {
+        TicketType ticketType = TicketType.builder()
+                .event(event)
+                .name("VIP")
+                .price(new BigDecimal("1500000"))
+                .maxPerOrder(4)
+                .isActive(true)
+                .build();
+        ticketType.setId(UUID.randomUUID());
+        return ticketType;
+    }
+
+    private ShowTimeTicketInventory inventory(
+            ShowTime showTime,
+            TicketType ticketType,
+            int total,
+            int reserved,
+            int sold) {
+        ShowTimeTicketInventory inventory = ShowTimeTicketInventory.builder()
+                .showTime(showTime)
+                .ticketType(ticketType)
+                .totalQuantity(total)
+                .reservedQuantity(reserved)
+                .soldQuantity(sold)
+                .build();
+        inventory.setId(UUID.randomUUID());
+        return inventory;
     }
 
     private Event draftEvent(User organizer, Category category) {
