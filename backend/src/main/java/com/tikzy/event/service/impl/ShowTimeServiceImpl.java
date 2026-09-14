@@ -14,6 +14,7 @@ import com.tikzy.event.mapper.ShowTimeMapper;
 import com.tikzy.event.repository.EventRepository;
 import com.tikzy.event.repository.ShowTimeRepository;
 import com.tikzy.event.service.ShowTimeService;
+import com.tikzy.ticket.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,6 +34,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     private final ShowTimeRepository showTimeRepository;
     private final UserRepository userRepository;
     private final ShowTimeMapper showTimeMapper;
+    private final InventoryService inventoryService;
 
     @Override
     @Transactional
@@ -44,7 +46,9 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         ShowTime showTime = showTimeMapper.toEntity(request);
         showTime.setEvent(event);
         showTime.setIsActive(true);
-        return showTimeMapper.toResponse(showTimeRepository.save(showTime));
+        ShowTime saved = showTimeRepository.save(showTime);
+        inventoryService.ensurePairsForShowTime(saved);
+        return showTimeMapper.toResponse(saved);
     }
 
     @Override

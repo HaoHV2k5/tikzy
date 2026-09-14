@@ -18,6 +18,8 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, UUID> {
 
     List<ShowTime> findAllByEventIdAndIsActiveTrueOrderByStartTimeAsc(UUID eventId);
 
+    List<ShowTime> findAllByEventIdOrderByStartTimeAsc(UUID eventId);
+
     Optional<ShowTime> findByIdAndEventId(UUID id, UUID eventId);
 
     Page<ShowTime> findAllByEventId(UUID eventId, Pageable pageable);
