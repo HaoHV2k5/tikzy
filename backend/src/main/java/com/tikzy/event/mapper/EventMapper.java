@@ -16,6 +16,8 @@ public interface EventMapper {
     @Mapping(target = "organizer", ignore = true)
     @Mapping(target = "category", ignore = true)
     @Mapping(target = "status", ignore = true)
+    @Mapping(target = "bannerUrl", ignore = true)
+    @Mapping(target = "thumbnailUrl", ignore = true)
     @Mapping(target = "cancellationReason", ignore = true)
     @Mapping(target = "cancelledAt", ignore = true)
     Event toEntity(CreateEventRequest request);
@@ -26,6 +28,8 @@ public interface EventMapper {
     @Mapping(target = "organizer", ignore = true)
     @Mapping(target = "category", ignore = true)
     @Mapping(target = "status", ignore = true)
+    @Mapping(target = "bannerUrl", ignore = true)
+    @Mapping(target = "thumbnailUrl", ignore = true)
     @Mapping(target = "cancellationReason", ignore = true)
     @Mapping(target = "cancelledAt", ignore = true)
     void updateEntity(UpdateEventRequest request, @MappingTarget Event event);

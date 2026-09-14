@@ -6,6 +6,8 @@ import com.tikzy.auth.repository.RoleRepository;
 import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
+import com.tikzy.common.storage.ImageStorageService;
+import com.tikzy.common.storage.StoredImage;
 import com.tikzy.event.entity.Category;
 import com.tikzy.event.entity.Event;
 import com.tikzy.event.entity.ShowTime;
@@ -30,10 +32,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 @Slf4j
 @Component
@@ -50,10 +60,12 @@ public class EventDemoSeeder implements ApplicationRunner {
     private final ShowTimeRepository showTimeRepository;
     private final TicketTypeRepository ticketTypeRepository;
     private final ShowTimeTicketInventoryRepository inventoryRepository;
+    private final ImageStorageService imageStorageService;
     private final PasswordEncoder passwordEncoder;
     private final String email;
     private final String password;
     private final String fullName;
+    private boolean imageStorageUnavailable;
 
     public EventDemoSeeder(
             UserRepository userRepository,
@@ -63,6 +75,7 @@ public class EventDemoSeeder implements ApplicationRunner {
             ShowTimeRepository showTimeRepository,
             TicketTypeRepository ticketTypeRepository,
             ShowTimeTicketInventoryRepository inventoryRepository,
+            ImageStorageService imageStorageService,
             PasswordEncoder passwordEncoder,
             @Value("${tikzy.seed.organizer.email}") String email,
             @Value("${tikzy.seed.organizer.password}") String password,
@@ -74,6 +87,7 @@ public class EventDemoSeeder implements ApplicationRunner {
         this.showTimeRepository = showTimeRepository;
         this.ticketTypeRepository = ticketTypeRepository;
         this.inventoryRepository = inventoryRepository;
+        this.imageStorageService = imageStorageService;
         this.passwordEncoder = passwordEncoder;
         this.email = email;
         this.password = password;
@@ -93,6 +107,7 @@ public class EventDemoSeeder implements ApplicationRunner {
         int createdShowTimes = 0;
         int createdTicketTypes = 0;
         int createdInventories = 0;
+        int createdImages = 0;
         for (SeedEvent seed : seedEvents()) {
             Event event = eventRepository
                     .findByOrganizerIdAndTitle(organizer.getId(), seed.title())
@@ -124,13 +139,15 @@ public class EventDemoSeeder implements ApplicationRunner {
             createdShowTimes += seedShowTimes(event, seed.showTimes());
             createdTicketTypes += seedTicketTypes(event, seed.ticketTypes());
             createdInventories += seedInventories(event);
+            createdImages += seedImages(event);
         }
         log.info(
-                "Seeded {} demo events, {} demo show times, {} demo ticket types and {} demo inventories for {}",
+                "Seeded {} demo events, {} demo show times, {} demo ticket types, {} demo inventories and {} demo images for {}",
                 createdEvents,
                 createdShowTimes,
                 createdTicketTypes,
                 createdInventories,
+                createdImages,
                 normalizedEmail);
     }
 
@@ -192,6 +209,79 @@ public class EventDemoSeeder implements ApplicationRunner {
             }
         }
         return created;
+    }
+
+    private int seedImages(Event event) {
+        int created = 0;
+        created += seedImage(
+                event,
+                "banner",
+                event.getBannerUrl(),
+                1600,
+                640,
+                new Color(30, 64, 175),
+                event::setBannerUrl);
+        created += seedImage(
+                event,
+                "thumbnail",
+                event.getThumbnailUrl(),
+                800,
+                800,
+                new Color(15, 118, 110),
+                event::setThumbnailUrl);
+        return created;
+    }
+
+    private int seedImage(
+            Event event,
+            String imageType,
+            String currentUrl,
+            int width,
+            int height,
+            Color background,
+            Consumer<String> assignUrl) {
+        if (imageStorageUnavailable || StringUtils.hasText(currentUrl)) {
+            return 0;
+        }
+        try {
+            StoredImage stored = imageStorageService.upload(
+                    renderSeedImage(event.getTitle(), width, height, background),
+                    "events/" + event.getId() + "/" + imageType);
+            assignUrl.accept(stored.url());
+            eventRepository.save(event);
+            return 1;
+        } catch (AppException exception) {
+            if (exception.getErrorCode() == ErrorCode.IMAGE_STORAGE_NOT_CONFIGURED) {
+                imageStorageUnavailable = true;
+                log.warn("Bỏ qua seed ảnh sự kiện vì Cloudinary chưa được cấu hình");
+                return 0;
+            }
+            log.warn(
+                    "Không seed được ảnh {} cho sự kiện '{}': {}",
+                    imageType,
+                    event.getTitle(),
+                    exception.getMessage());
+            return 0;
+        }
+    }
+
+    private byte[] renderSeedImage(String title, int width, int height, Color background) {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = image.createGraphics();
+        graphics.setColor(background);
+        graphics.fillRect(0, 0, width, height);
+        graphics.setColor(Color.WHITE);
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, Math.max(28, width / 24)));
+        graphics.drawString(title, 48, height / 2);
+        graphics.dispose();
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            if (!ImageIO.write(image, "jpg", output)) {
+                throw new IllegalStateException("Không tạo được ảnh seed JPEG");
+            }
+            return output.toByteArray();
+        } catch (IOException exception) {
+            throw new IllegalStateException("Không tạo được ảnh seed JPEG", exception);
+        }
     }
 
     private int seedQuantity(String ticketTypeName) {

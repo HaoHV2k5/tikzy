@@ -54,6 +54,11 @@ public enum ErrorCode {
     INVALID_EVENT_STATUS(2013, "Trạng thái sự kiện không hợp lệ", HttpStatus.CONFLICT),
     INVALID_EVENT_DATA(2014, "Thông tin sự kiện không hợp lệ", HttpStatus.BAD_REQUEST),
     INVALID_SHOW_TIME_DATA(2015, "Thông tin suất diễn không hợp lệ", HttpStatus.BAD_REQUEST),
+    INVALID_EVENT_IMAGE(2016, "Ảnh sự kiện không hợp lệ", HttpStatus.BAD_REQUEST),
+    EVENT_IMAGE_NOT_FOUND(2017, "Không tìm thấy ảnh sự kiện", HttpStatus.NOT_FOUND),
+    IMAGE_UPLOAD_FAILED(2018, "Không thể tải ảnh lên Cloudinary", HttpStatus.BAD_GATEWAY),
+    IMAGE_DELETE_FAILED(2019, "Không thể xóa ảnh trên Cloudinary", HttpStatus.BAD_GATEWAY),
+    IMAGE_STORAGE_NOT_CONFIGURED(2020, "Dịch vụ lưu ảnh chưa được cấu hình", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // Ticket / Inventory 3xxx
     TICKET_TYPE_NOT_FOUND(3001, "Không tìm thấy hạng vé", HttpStatus.NOT_FOUND),
