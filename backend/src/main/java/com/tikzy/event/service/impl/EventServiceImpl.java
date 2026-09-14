@@ -4,12 +4,15 @@ import com.tikzy.auth.entity.User;
 import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
+import com.tikzy.common.storage.ImageStorageService;
+import com.tikzy.common.storage.StoredImage;
 import com.tikzy.event.dto.request.CreateEventRequest;
 import com.tikzy.event.dto.request.UpdateEventRequest;
 import com.tikzy.event.dto.response.EventResponse;
 import com.tikzy.event.entity.Category;
 import com.tikzy.event.entity.Event;
 import com.tikzy.event.enums.CategoryStatus;
+import com.tikzy.event.enums.EventImageType;
 import com.tikzy.event.enums.EventStatus;
 import com.tikzy.event.enums.RefundPolicy;
 import com.tikzy.event.mapper.EventMapper;
@@ -22,9 +25,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -32,11 +38,19 @@ import java.util.UUID;
 public class EventServiceImpl implements EventService {
 
     private static final BigDecimal MAX_REFUND_FEE = new BigDecimal("100");
+    private static final long MAX_IMAGE_SIZE_BYTES = 10L * 1024 * 1024;
+    private static final Set<String> ALLOWED_IMAGE_CONTENT_TYPES = Set.of(
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/webp",
+            "image/gif");
 
     private final EventRepository eventRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final EventMapper eventMapper;
+    private final ImageStorageService imageStorageService;
 
     @Override
     @Transactional
@@ -58,8 +72,6 @@ public class EventServiceImpl implements EventService {
         event.setDescription(normalizeNullable(request.getDescription()));
         event.setVenueName(normalizeNullable(request.getVenueName()));
         event.setVenueAddress(normalizeNullable(request.getVenueAddress()));
-        event.setBannerUrl(normalizeNullable(request.getBannerUrl()));
-        event.setThumbnailUrl(normalizeNullable(request.getThumbnailUrl()));
         event.setStatus(EventStatus.DRAFT);
         event.setRefundPolicy(refundPolicy);
         if (refundPolicy == RefundPolicy.NO_REFUND) {
@@ -129,12 +141,6 @@ public class EventServiceImpl implements EventService {
         if (request.getVenueAddress() != null) {
             event.setVenueAddress(normalizeNullable(request.getVenueAddress()));
         }
-        if (request.getBannerUrl() != null) {
-            event.setBannerUrl(normalizeNullable(request.getBannerUrl()));
-        }
-        if (request.getThumbnailUrl() != null) {
-            event.setThumbnailUrl(normalizeNullable(request.getThumbnailUrl()));
-        }
         event.setRefundPolicy(refundPolicy);
         event.setRefundDeadlineDays(refundDeadlineDays);
         event.setRefundFeePercentage(refundFeePercentage);
@@ -143,9 +149,41 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
+    public EventResponse uploadImage(
+            String organizerEmail,
+            UUID eventId,
+            String imageType,
+            MultipartFile file) {
+        Event event = findOwnEvent(organizerEmail, eventId);
+        requireDraft(event);
+        EventImageType type = parseImageType(imageType);
+        byte[] content = readImage(file);
+        StoredImage storedImage = imageStorageService.upload(content, imagePublicId(event.getId(), type));
+        applyImageUrl(event, type, storedImage.url());
+        return eventMapper.toResponse(eventRepository.save(event));
+    }
+
+    @Override
+    @Transactional
+    public EventResponse deleteImage(String organizerEmail, UUID eventId, String imageType) {
+        Event event = findOwnEvent(organizerEmail, eventId);
+        requireDraft(event);
+        EventImageType type = parseImageType(imageType);
+        if (!StringUtils.hasText(currentImageUrl(event, type))) {
+            throw new AppException(ErrorCode.EVENT_IMAGE_NOT_FOUND);
+        }
+        imageStorageService.delete(imagePublicId(event.getId(), type));
+        applyImageUrl(event, type, null);
+        return eventMapper.toResponse(eventRepository.save(event));
+    }
+
+    @Override
+    @Transactional
     public EventResponse deleteDraft(String organizerEmail, UUID eventId) {
         Event event = findOwnEvent(organizerEmail, eventId);
         requireDraft(event);
+        deleteStoredImage(event, EventImageType.BANNER);
+        deleteStoredImage(event, EventImageType.THUMBNAIL);
         EventResponse response = eventMapper.toResponse(event);
         eventRepository.delete(event);
         return response;
@@ -220,5 +258,65 @@ public class EventServiceImpl implements EventService {
 
     private String normalizeNullable(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private EventImageType parseImageType(String imageType) {
+        if (!StringUtils.hasText(imageType)) {
+            throw new AppException(
+                    ErrorCode.INVALID_EVENT_IMAGE,
+                    "Loại ảnh phải là banner hoặc thumbnail");
+        }
+        try {
+            return EventImageType.valueOf(imageType.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new AppException(
+                    ErrorCode.INVALID_EVENT_IMAGE,
+                    "Loại ảnh phải là banner hoặc thumbnail");
+        }
+    }
+
+    private byte[] readImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_EVENT_IMAGE, "Thiếu file ảnh");
+        }
+        if (file.getSize() > MAX_IMAGE_SIZE_BYTES) {
+            throw new AppException(ErrorCode.INVALID_EVENT_IMAGE, "Ảnh không được vượt quá 10MB");
+        }
+        String contentType = file.getContentType() == null
+                ? ""
+                : file.getContentType().trim().toLowerCase(Locale.ROOT);
+        if (!ALLOWED_IMAGE_CONTENT_TYPES.contains(contentType)) {
+            throw new AppException(
+                    ErrorCode.INVALID_EVENT_IMAGE,
+                    "Ảnh sự kiện chỉ nhận JPEG, PNG, WEBP hoặc GIF");
+        }
+        try {
+            return file.getBytes();
+        } catch (IOException exception) {
+            throw new AppException(ErrorCode.INVALID_EVENT_IMAGE, "Không đọc được file ảnh");
+        }
+    }
+
+    private void deleteStoredImage(Event event, EventImageType type) {
+        if (!StringUtils.hasText(currentImageUrl(event, type))) {
+            return;
+        }
+        imageStorageService.delete(imagePublicId(event.getId(), type));
+    }
+
+    private String imagePublicId(UUID eventId, EventImageType type) {
+        return "events/" + eventId + "/" + type.name().toLowerCase(Locale.ROOT);
+    }
+
+    private String currentImageUrl(Event event, EventImageType type) {
+        return type == EventImageType.BANNER ? event.getBannerUrl() : event.getThumbnailUrl();
+    }
+
+    private void applyImageUrl(Event event, EventImageType type, String url) {
+        if (type == EventImageType.BANNER) {
+            event.setBannerUrl(url);
+            return;
+        }
+        event.setThumbnailUrl(url);
     }
 }

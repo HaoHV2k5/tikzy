@@ -4,6 +4,8 @@ import com.tikzy.auth.entity.Role;
 import com.tikzy.auth.entity.User;
 import com.tikzy.auth.repository.RoleRepository;
 import com.tikzy.auth.repository.UserRepository;
+import com.tikzy.common.storage.ImageStorageService;
+import com.tikzy.common.storage.StoredImage;
 import com.tikzy.event.entity.Category;
 import com.tikzy.event.entity.Event;
 import com.tikzy.event.entity.ShowTime;
@@ -58,6 +60,8 @@ class EventDemoSeederTest {
     private TicketTypeRepository ticketTypeRepository;
     @Mock
     private ShowTimeTicketInventoryRepository inventoryRepository;
+    @Mock
+    private ImageStorageService imageStorageService;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private Role organizerRole;
@@ -84,6 +88,7 @@ class EventDemoSeederTest {
                 showTimeRepository,
                 ticketTypeRepository,
                 inventoryRepository,
+                imageStorageService,
                 passwordEncoder,
                 " " + EMAIL.toUpperCase() + " ",
                 PASSWORD,
@@ -107,19 +112,23 @@ class EventDemoSeederTest {
         when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(any(), any())).thenReturn(false);
         stubInventoryLookups();
         stubPublishedCategories();
+        stubImageUploads();
 
         seeder.run(null);
 
         ArgumentCaptor<Event> eventCaptor = ArgumentCaptor.forClass(Event.class);
-        verify(eventRepository, times(5)).save(eventCaptor.capture());
+        verify(eventRepository, times(15)).save(eventCaptor.capture());
         List<Event> saved = eventCaptor.getAllValues();
-        assertEquals(5, saved.size());
+        assertEquals(15, saved.size());
         assertTrue(saved.stream().allMatch(event -> event.getStatus() == EventStatus.DRAFT));
         assertEquals("Hòa nhạc mùa hè", saved.get(0).getTitle());
-        assertEquals("Kịch Hamlet", saved.get(1).getTitle());
-        assertEquals("Giải chạy đêm Sài Gòn", saved.get(2).getTitle());
-        assertEquals("Hội thảo AI 2026", saved.get(3).getTitle());
-        assertEquals("Lễ hội Trung thu", saved.get(4).getTitle());
+        assertEquals("Kịch Hamlet", saved.get(3).getTitle());
+        assertEquals("Giải chạy đêm Sài Gòn", saved.get(6).getTitle());
+        assertEquals("Hội thảo AI 2026", saved.get(9).getTitle());
+        assertEquals("Lễ hội Trung thu", saved.get(12).getTitle());
+        assertTrue(saved.stream().anyMatch(event ->
+                event.getBannerUrl() != null && event.getThumbnailUrl() != null));
+        verify(imageStorageService, times(10)).upload(any(), any());
 
         ArgumentCaptor<ShowTime> showTimeCaptor = ArgumentCaptor.forClass(ShowTime.class);
         verify(showTimeRepository, times(13)).save(showTimeCaptor.capture());
@@ -149,6 +158,8 @@ class EventDemoSeederTest {
                 .organizer(organizer)
                 .title("Hòa nhạc mùa hè")
                 .status(EventStatus.DRAFT)
+                .bannerUrl("https://res.cloudinary.com/demo/image/upload/v1/banner.jpg")
+                .thumbnailUrl("https://res.cloudinary.com/demo/image/upload/v1/thumb.jpg")
                 .build();
         existing.setId(UUID.randomUUID());
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(organizer));
@@ -161,6 +172,7 @@ class EventDemoSeederTest {
 
         verify(userRepository, never()).save(any(User.class));
         verify(eventRepository, never()).save(any(Event.class));
+        verify(imageStorageService, never()).upload(any(), any());
         verify(showTimeRepository, times(13)).save(any(ShowTime.class));
         verify(ticketTypeRepository, times(14)).save(any(TicketType.class));
         verify(inventoryRepository, times(5)).save(any(ShowTimeTicketInventory.class));
@@ -176,6 +188,7 @@ class EventDemoSeederTest {
                 showTimeRepository,
                 ticketTypeRepository,
                 inventoryRepository,
+                imageStorageService,
                 passwordEncoder,
                 EMAIL,
                 " ",
@@ -224,5 +237,14 @@ class EventDemoSeederTest {
                 .build();
         category.setId(UUID.randomUUID());
         return category;
+    }
+
+    private void stubImageUploads() {
+        when(imageStorageService.upload(any(), any())).thenAnswer(invocation -> {
+            String publicId = invocation.getArgument(1);
+            return new StoredImage(
+                    "https://res.cloudinary.com/demo/image/upload/v1/" + publicId + ".jpg",
+                    "tikzy/" + publicId);
+        });
     }
 }

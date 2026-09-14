@@ -32,12 +32,6 @@ public class CreateEventRequest {
     @Size(max = 500, message = "Địa chỉ không được vượt quá 500 ký tự")
     private String venueAddress;
 
-    @Size(max = 500, message = "URL banner không được vượt quá 500 ký tự")
-    private String bannerUrl;
-
-    @Size(max = 500, message = "URL thumbnail không được vượt quá 500 ký tự")
-    private String thumbnailUrl;
-
     private RefundPolicy refundPolicy;
 
     @Min(value = 1, message = "Số ngày hoàn vé phải lớn hơn 0")

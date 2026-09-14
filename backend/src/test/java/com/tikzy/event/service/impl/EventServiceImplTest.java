@@ -5,6 +5,8 @@ import com.tikzy.auth.entity.User;
 import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.common.exception.AppException;
 import com.tikzy.common.exception.ErrorCode;
+import com.tikzy.common.storage.ImageStorageService;
+import com.tikzy.common.storage.StoredImage;
 import com.tikzy.event.dto.request.CreateEventRequest;
 import com.tikzy.event.dto.request.UpdateEventRequest;
 import com.tikzy.event.dto.response.EventResponse;
@@ -23,6 +25,7 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -33,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,6 +50,8 @@ class EventServiceImplTest {
     private CategoryRepository categoryRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private ImageStorageService imageStorageService;
 
     private final EventMapper eventMapper = Mappers.getMapper(EventMapper.class);
     private EventServiceImpl eventService;
@@ -56,7 +62,8 @@ class EventServiceImplTest {
                 eventRepository,
                 categoryRepository,
                 userRepository,
-                eventMapper);
+                eventMapper,
+                imageStorageService);
     }
 
     @Test
@@ -157,6 +164,177 @@ class EventServiceImplTest {
         EventResponse response = eventService.deleteDraft("organizer@example.com", event.getId());
 
         assertEquals(event.getTitle(), response.getTitle());
+        verify(eventRepository).delete(event);
+        verify(imageStorageService, never()).delete(any());
+    }
+
+    @Test
+    void uploadImage_storesBannerUrlFromCloudinary() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "banner.jpg",
+                "image/jpeg",
+                new byte[] {1, 2, 3});
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+        when(imageStorageService.upload(any(), eq("events/" + event.getId() + "/banner")))
+                .thenReturn(new StoredImage(
+                        "https://res.cloudinary.com/demo/image/upload/v1/tikzy/events/"
+                                + event.getId()
+                                + "/banner.jpg",
+                        "tikzy/events/" + event.getId() + "/banner"));
+        when(eventRepository.save(any(Event.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        EventResponse response = eventService.uploadImage(
+                "organizer@example.com",
+                event.getId(),
+                "banner",
+                file);
+
+        assertEquals(
+                "https://res.cloudinary.com/demo/image/upload/v1/tikzy/events/"
+                        + event.getId()
+                        + "/banner.jpg",
+                response.getBannerUrl());
+        verify(imageStorageService).upload(any(), eq("events/" + event.getId() + "/banner"));
+    }
+
+    @Test
+    void uploadImage_publishedEvent_throwsInvalidStatus() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        event.setStatus(EventStatus.PUBLISHED);
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "banner.jpg",
+                "image/jpeg",
+                new byte[] {1, 2, 3});
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.uploadImage(
+                        "organizer@example.com",
+                        event.getId(),
+                        "banner",
+                        file));
+
+        assertEquals(ErrorCode.INVALID_EVENT_STATUS, exception.getErrorCode());
+        verify(imageStorageService, never()).upload(any(), any());
+    }
+
+    @Test
+    void uploadImage_invalidType_throwsInvalidImage() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "banner.jpg",
+                "image/jpeg",
+                new byte[] {1, 2, 3});
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.uploadImage(
+                        "organizer@example.com",
+                        event.getId(),
+                        "poster",
+                        file));
+
+        assertEquals(ErrorCode.INVALID_EVENT_IMAGE, exception.getErrorCode());
+        verify(imageStorageService, never()).upload(any(), any());
+    }
+
+    @Test
+    void uploadImage_svg_throwsInvalidImage() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "banner.svg",
+                "image/svg+xml",
+                "<svg></svg>".getBytes());
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.uploadImage(
+                        "organizer@example.com",
+                        event.getId(),
+                        "banner",
+                        file));
+
+        assertEquals(ErrorCode.INVALID_EVENT_IMAGE, exception.getErrorCode());
+        verify(imageStorageService, never()).upload(any(), any());
+        verify(eventRepository, never()).save(any(Event.class));
+    }
+
+    @Test
+    void deleteImage_removesThumbnailFromCloudinary() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        event.setThumbnailUrl("https://res.cloudinary.com/demo/image/upload/v1/thumb.jpg");
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+        when(eventRepository.save(any(Event.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        EventResponse response = eventService.deleteImage(
+                "organizer@example.com",
+                event.getId(),
+                "thumbnail");
+
+        assertNull(response.getThumbnailUrl());
+        verify(imageStorageService).delete("events/" + event.getId() + "/thumbnail");
+    }
+
+    @Test
+    void deleteImage_withoutExistingImage_throwsNotFound() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+
+        AppException exception = assertThrows(
+                AppException.class,
+                () -> eventService.deleteImage("organizer@example.com", event.getId(), "banner"));
+
+        assertEquals(ErrorCode.EVENT_IMAGE_NOT_FOUND, exception.getErrorCode());
+        verify(imageStorageService, never()).delete(any());
+    }
+
+    @Test
+    void deleteDraft_deletesStoredImages() {
+        User organizer = organizer();
+        Event event = draftEvent(organizer, publishedCategory());
+        event.setBannerUrl("https://res.cloudinary.com/demo/image/upload/v1/banner.jpg");
+        event.setThumbnailUrl("https://res.cloudinary.com/demo/image/upload/v1/thumb.jpg");
+        when(userRepository.findByEmail("organizer@example.com"))
+                .thenReturn(Optional.of(organizer));
+        when(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+                .thenReturn(Optional.of(event));
+
+        eventService.deleteDraft("organizer@example.com", event.getId());
+
+        verify(imageStorageService).delete("events/" + event.getId() + "/banner");
+        verify(imageStorageService).delete("events/" + event.getId() + "/thumbnail");
         verify(eventRepository).delete(event);
     }
 
