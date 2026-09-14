@@ -3,6 +3,7 @@ package com.tikzy.ticket.repository;
 import com.tikzy.ticket.entity.ShowTimeTicketInventory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -15,6 +16,7 @@ public interface ShowTimeTicketInventoryRepository extends JpaRepository<ShowTim
 
     List<ShowTimeTicketInventory> findAllByShowTimeId(UUID showTimeId);
 
+    @EntityGraph(attributePaths = {"showTime", "ticketType"})
     List<ShowTimeTicketInventory> findAllByShowTimeEventId(UUID eventId);
 
     Optional<ShowTimeTicketInventory> findByShowTimeIdAndTicketTypeId(UUID showTimeId, UUID ticketTypeId);

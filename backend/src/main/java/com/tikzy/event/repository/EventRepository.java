@@ -14,7 +14,11 @@ import java.util.UUID;
 @Repository
 public interface EventRepository extends JpaRepository<Event, UUID> {
 
+    @EntityGraph(attributePaths = {"category", "organizer"})
     Page<Event> findAllByStatus(EventStatus status, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"category", "organizer"})
+    Optional<Event> findByIdAndStatus(UUID id, EventStatus status);
 
     @EntityGraph(attributePaths = {"category", "organizer"})
     Page<Event> findAllByOrganizerId(UUID organizerId, Pageable pageable);
@@ -32,5 +36,6 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
 
     Optional<Event> findByOrganizerIdAndTitle(UUID organizerId, String title);
 
+    @EntityGraph(attributePaths = {"category", "organizer"})
     Page<Event> findAllByCategoryIdAndStatus(UUID categoryId, EventStatus status, Pageable pageable);
 }
