@@ -12,6 +12,9 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -53,6 +56,30 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleInvalidSort(PropertyReferenceException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.<Void>error(1400, "Trường sắp xếp không hợp lệ"));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(ErrorCode.INVALID_EVENT_IMAGE.getHttpStatus())
+                .body(ApiResponse.<Void>error(
+                        ErrorCode.INVALID_EVENT_IMAGE.getCode(),
+                        "Ảnh không được vượt quá 10MB"));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingUploadPart(MissingServletRequestPartException ex) {
+        return ResponseEntity.status(ErrorCode.INVALID_EVENT_IMAGE.getHttpStatus())
+                .body(ApiResponse.<Void>error(
+                        ErrorCode.INVALID_EVENT_IMAGE.getCode(),
+                        "Thiếu file ảnh"));
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMultipart(MultipartException ex) {
+        return ResponseEntity.status(ErrorCode.INVALID_EVENT_IMAGE.getHttpStatus())
+                .body(ApiResponse.<Void>error(
+                        ErrorCode.INVALID_EVENT_IMAGE.getCode(),
+                        "File ảnh không hợp lệ"));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

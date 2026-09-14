@@ -16,7 +16,9 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -30,6 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -180,5 +183,81 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.message").value("Xóa sự kiện thành công"));
 
         verify(eventService).deleteDraft("organizer@example.com", eventId);
+    }
+
+    @Test
+    @WithMockUser(username = "organizer@example.com", roles = "ORGANIZER")
+    void uploadImage_asOrganizer_returnsUpdatedEvent() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        EventResponse response = EventResponse.builder()
+                .id(eventId)
+                .title("Hòa nhạc mùa hè")
+                .bannerUrl("https://res.cloudinary.com/demo/image/upload/v1/banner.jpg")
+                .status(EventStatus.DRAFT)
+                .build();
+        when(eventService.uploadImage(eq("organizer@example.com"), eq(eventId), eq("banner"), any()))
+                .thenReturn(response);
+
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/v1/organizer/events/{eventId}/images/banner", eventId)
+                        .file(new MockMultipartFile(
+                                "file",
+                                "banner.jpg",
+                                MediaType.IMAGE_JPEG_VALUE,
+                                new byte[] {1, 2, 3})))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Cập nhật ảnh sự kiện thành công"))
+                .andExpect(jsonPath("$.data.bannerUrl")
+                        .value("https://res.cloudinary.com/demo/image/upload/v1/banner.jpg"));
+
+        verify(eventService).uploadImage(eq("organizer@example.com"), eq(eventId), eq("banner"), any());
+    }
+
+    @Test
+    @WithMockUser(roles = "CUSTOMER")
+    void uploadImage_asCustomer_returnsForbidden() throws Exception {
+        mockMvc.perform(multipart(
+                        HttpMethod.PUT,
+                        "/api/v1/organizer/events/{eventId}/images/banner",
+                        UUID.randomUUID())
+                        .file(new MockMultipartFile(
+                                "file",
+                                "banner.jpg",
+                                MediaType.IMAGE_JPEG_VALUE,
+                                new byte[] {1, 2, 3})))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1403));
+
+        verify(eventService, never()).uploadImage(any(), any(), any(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "organizer@example.com", roles = "ORGANIZER")
+    void uploadImage_withoutFile_returnsBadRequest() throws Exception {
+        UUID eventId = UUID.randomUUID();
+
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/v1/organizer/events/{eventId}/images/banner", eventId)
+                        .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(2016));
+
+        verify(eventService, never()).uploadImage(any(), any(), any(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "organizer@example.com", roles = "ORGANIZER")
+    void deleteImage_asOrganizer_returnsEventWithoutImage() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        EventResponse response = EventResponse.builder()
+                .id(eventId)
+                .title("Hòa nhạc mùa hè")
+                .status(EventStatus.DRAFT)
+                .build();
+        when(eventService.deleteImage("organizer@example.com", eventId, "thumbnail")).thenReturn(response);
+
+        mockMvc.perform(delete("/api/v1/organizer/events/{eventId}/images/thumbnail", eventId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Xóa ảnh sự kiện thành công"));
+
+        verify(eventService).deleteImage("organizer@example.com", eventId, "thumbnail");
     }
 }

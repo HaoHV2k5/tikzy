@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -22,10 +23,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -82,6 +86,27 @@ public class EventController {
         return ApiResponse.ok(
                 "Cập nhật sự kiện thành công",
                 eventService.update(currentUserEmail(authentication), eventId, request));
+    }
+
+    @PutMapping(path = "/{eventId}/images/{imageType}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<EventResponse> uploadImage(
+            Authentication authentication,
+            @PathVariable UUID eventId,
+            @PathVariable String imageType,
+            @RequestPart("file") MultipartFile file) {
+        return ApiResponse.ok(
+                "Cập nhật ảnh sự kiện thành công",
+                eventService.uploadImage(currentUserEmail(authentication), eventId, imageType, file));
+    }
+
+    @DeleteMapping("/{eventId}/images/{imageType}")
+    public ApiResponse<EventResponse> deleteImage(
+            Authentication authentication,
+            @PathVariable UUID eventId,
+            @PathVariable String imageType) {
+        return ApiResponse.ok(
+                "Xóa ảnh sự kiện thành công",
+                eventService.deleteImage(currentUserEmail(authentication), eventId, imageType));
     }
 
     @DeleteMapping("/{eventId}")
