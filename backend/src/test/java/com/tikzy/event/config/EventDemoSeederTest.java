@@ -7,11 +7,13 @@ import com.tikzy.auth.repository.UserRepository;
 import com.tikzy.event.entity.Category;
 import com.tikzy.event.entity.Event;
 import com.tikzy.event.entity.ShowTime;
+import com.tikzy.event.entity.TicketType;
 import com.tikzy.event.enums.CategoryStatus;
 import com.tikzy.event.enums.EventStatus;
 import com.tikzy.event.repository.CategoryRepository;
 import com.tikzy.event.repository.EventRepository;
 import com.tikzy.event.repository.ShowTimeRepository;
+import com.tikzy.event.repository.TicketTypeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,6 +52,8 @@ class EventDemoSeederTest {
     private EventRepository eventRepository;
     @Mock
     private ShowTimeRepository showTimeRepository;
+    @Mock
+    private TicketTypeRepository ticketTypeRepository;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private Role organizerRole;
@@ -74,6 +78,7 @@ class EventDemoSeederTest {
                 categoryRepository,
                 eventRepository,
                 showTimeRepository,
+                ticketTypeRepository,
                 passwordEncoder,
                 " " + EMAIL.toUpperCase() + " ",
                 PASSWORD,
@@ -94,6 +99,7 @@ class EventDemoSeederTest {
             return event;
         });
         when(showTimeRepository.existsByEventIdAndStartTimeAndEndTime(any(), any(), any())).thenReturn(false);
+        when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(any(), any())).thenReturn(false);
         stubPublishedCategories();
 
         seeder.run(null);
@@ -117,6 +123,16 @@ class EventDemoSeederTest {
         assertEquals(3, showTimes.stream()
                 .filter(showTime -> "Hòa nhạc mùa hè".equals(showTime.getEvent().getTitle()))
                 .count());
+
+        ArgumentCaptor<TicketType> ticketTypeCaptor = ArgumentCaptor.forClass(TicketType.class);
+        verify(ticketTypeRepository, times(14)).save(ticketTypeCaptor.capture());
+        List<TicketType> ticketTypes = ticketTypeCaptor.getAllValues();
+        assertEquals(14, ticketTypes.size());
+        assertEquals(3, ticketTypes.stream()
+                .filter(ticketType -> "Hòa nhạc mùa hè".equals(ticketType.getEvent().getTitle()))
+                .count());
+        assertTrue(ticketTypes.stream().anyMatch(ticketType -> "VIP".equals(ticketType.getName())));
+        assertTrue(ticketTypes.stream().anyMatch(ticketType -> !ticketType.getIsActive()));
     }
 
     @Test
@@ -130,12 +146,14 @@ class EventDemoSeederTest {
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(organizer));
         when(eventRepository.findByOrganizerIdAndTitle(any(), any())).thenReturn(Optional.of(existing));
         when(showTimeRepository.existsByEventIdAndStartTimeAndEndTime(any(), any(), any())).thenReturn(false);
+        when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(any(), any())).thenReturn(false);
 
         seeder.run(null);
 
         verify(userRepository, never()).save(any(User.class));
         verify(eventRepository, never()).save(any(Event.class));
         verify(showTimeRepository, times(13)).save(any(ShowTime.class));
+        verify(ticketTypeRepository, times(14)).save(any(TicketType.class));
     }
 
     @Test
@@ -146,6 +164,7 @@ class EventDemoSeederTest {
                 categoryRepository,
                 eventRepository,
                 showTimeRepository,
+                ticketTypeRepository,
                 passwordEncoder,
                 EMAIL,
                 " ",
