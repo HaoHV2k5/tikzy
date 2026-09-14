@@ -37,4 +37,8 @@ public interface EventMapper {
     @Mapping(source = "organizer.id", target = "organizerId")
     @Mapping(source = "organizer.email", target = "organizerEmail")
     EventResponse toResponse(Event event);
+
+    @Mapping(source = "organizer.id", target = "organizerId")
+    @Mapping(target = "organizerEmail", ignore = true)
+    EventResponse toPublicResponse(Event event);
 }

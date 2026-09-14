@@ -260,4 +260,34 @@ class EventControllerTest {
 
         verify(eventService).deleteImage("organizer@example.com", eventId, "thumbnail");
     }
+
+    @Test
+    @WithMockUser(username = "organizer@example.com", roles = "ORGANIZER")
+    void publish_asOrganizer_returnsPublishedEvent() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        EventResponse response = EventResponse.builder()
+                .id(eventId)
+                .title("Hòa nhạc mùa hè")
+                .status(EventStatus.PUBLISHED)
+                .build();
+        when(eventService.publish("organizer@example.com", eventId)).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/organizer/events/{eventId}/publish", eventId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Công khai sự kiện thành công"))
+                .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+
+        verify(eventService).publish("organizer@example.com", eventId);
+    }
+
+    @Test
+    @WithMockUser(roles = "CUSTOMER")
+    void publish_asCustomer_returnsForbidden() throws Exception {
+        mockMvc.perform(post("/api/v1/organizer/events/{eventId}/publish", UUID.randomUUID()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1403));
+
+        verify(eventService, never()).publish(any(), any());
+    }
 }

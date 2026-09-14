@@ -63,10 +63,7 @@ public class EventController {
                 eventService.getOwn(
                         currentUserEmail(authentication),
                         status,
-                        PageRequest.of(
-                                page,
-                                size,
-                                Sort.by(Sort.Direction.DESC, "createdAt"))));
+                        eventPageRequest(page, size)));
     }
 
     @GetMapping("/{eventId}")
@@ -118,6 +115,15 @@ public class EventController {
                 eventService.deleteDraft(currentUserEmail(authentication), eventId));
     }
 
+    @PostMapping("/{eventId}/publish")
+    public ApiResponse<EventResponse> publish(
+            Authentication authentication,
+            @PathVariable UUID eventId) {
+        return ApiResponse.ok(
+                "Công khai sự kiện thành công",
+                eventService.publish(currentUserEmail(authentication), eventId));
+    }
+
     private String currentUserEmail(Authentication authentication) {
         if (authentication == null
                 || !authentication.isAuthenticated()
@@ -125,5 +131,9 @@ public class EventController {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
         return authentication.getName();
+    }
+
+    private PageRequest eventPageRequest(int page, int size) {
+        return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 }
