@@ -15,6 +15,8 @@ public interface TicketTypeRepository extends JpaRepository<TicketType, UUID> {
 
     List<TicketType> findAllByEventIdAndIsActiveTrue(UUID eventId);
 
+    List<TicketType> findAllByEventIdOrderByCreatedAtAsc(UUID eventId);
+
     Optional<TicketType> findByIdAndEventId(UUID id, UUID eventId);
 
     Page<TicketType> findAllByEventId(UUID eventId, Pageable pageable);

@@ -17,6 +17,8 @@ import com.tikzy.event.repository.CategoryRepository;
 import com.tikzy.event.repository.EventRepository;
 import com.tikzy.event.repository.ShowTimeRepository;
 import com.tikzy.event.repository.TicketTypeRepository;
+import com.tikzy.ticket.entity.ShowTimeTicketInventory;
+import com.tikzy.ticket.repository.ShowTimeTicketInventoryRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -47,6 +49,7 @@ public class EventDemoSeeder implements ApplicationRunner {
     private final EventRepository eventRepository;
     private final ShowTimeRepository showTimeRepository;
     private final TicketTypeRepository ticketTypeRepository;
+    private final ShowTimeTicketInventoryRepository inventoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final String email;
     private final String password;
@@ -59,6 +62,7 @@ public class EventDemoSeeder implements ApplicationRunner {
             EventRepository eventRepository,
             ShowTimeRepository showTimeRepository,
             TicketTypeRepository ticketTypeRepository,
+            ShowTimeTicketInventoryRepository inventoryRepository,
             PasswordEncoder passwordEncoder,
             @Value("${tikzy.seed.organizer.email}") String email,
             @Value("${tikzy.seed.organizer.password}") String password,
@@ -69,6 +73,7 @@ public class EventDemoSeeder implements ApplicationRunner {
         this.eventRepository = eventRepository;
         this.showTimeRepository = showTimeRepository;
         this.ticketTypeRepository = ticketTypeRepository;
+        this.inventoryRepository = inventoryRepository;
         this.passwordEncoder = passwordEncoder;
         this.email = email;
         this.password = password;
@@ -87,6 +92,7 @@ public class EventDemoSeeder implements ApplicationRunner {
         int createdEvents = 0;
         int createdShowTimes = 0;
         int createdTicketTypes = 0;
+        int createdInventories = 0;
         for (SeedEvent seed : seedEvents()) {
             Event event = eventRepository
                     .findByOrganizerIdAndTitle(organizer.getId(), seed.title())
@@ -117,12 +123,14 @@ public class EventDemoSeeder implements ApplicationRunner {
             }
             createdShowTimes += seedShowTimes(event, seed.showTimes());
             createdTicketTypes += seedTicketTypes(event, seed.ticketTypes());
+            createdInventories += seedInventories(event);
         }
         log.info(
-                "Seeded {} demo events, {} demo show times and {} demo ticket types for {}",
+                "Seeded {} demo events, {} demo show times, {} demo ticket types and {} demo inventories for {}",
                 createdEvents,
                 createdShowTimes,
                 createdTicketTypes,
+                createdInventories,
                 normalizedEmail);
     }
 
@@ -162,6 +170,46 @@ public class EventDemoSeeder implements ApplicationRunner {
             created++;
         }
         return created;
+    }
+
+    private int seedInventories(Event event) {
+        List<ShowTime> showTimes = showTimeRepository.findAllByEventIdOrderByStartTimeAsc(event.getId());
+        List<TicketType> ticketTypes = ticketTypeRepository.findAllByEventIdOrderByCreatedAtAsc(event.getId());
+        int created = 0;
+        for (ShowTime showTime : showTimes) {
+            for (TicketType ticketType : ticketTypes) {
+                if (inventoryRepository.existsByShowTimeIdAndTicketTypeId(showTime.getId(), ticketType.getId())) {
+                    continue;
+                }
+                inventoryRepository.save(ShowTimeTicketInventory.builder()
+                        .showTime(showTime)
+                        .ticketType(ticketType)
+                        .totalQuantity(seedQuantity(ticketType.getName()))
+                        .reservedQuantity(0)
+                        .soldQuantity(0)
+                        .build());
+                created++;
+            }
+        }
+        return created;
+    }
+
+    private int seedQuantity(String ticketTypeName) {
+        return switch (ticketTypeName) {
+            case "Early Bird" -> 80;
+            case "GA" -> 200;
+            case "VIP" -> 40;
+            case "VVIP" -> 12;
+            case "Standard" -> 150;
+            case "5km" -> 300;
+            case "10km" -> 200;
+            case "Regular" -> 120;
+            case "Student" -> 60;
+            case "Trẻ em" -> 100;
+            case "Người lớn" -> 200;
+            case "Gia đình" -> 40;
+            default -> 100;
+        };
     }
 
     private User resolveOrganizer(String normalizedEmail) {

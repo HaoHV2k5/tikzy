@@ -14,6 +14,8 @@ import com.tikzy.event.repository.CategoryRepository;
 import com.tikzy.event.repository.EventRepository;
 import com.tikzy.event.repository.ShowTimeRepository;
 import com.tikzy.event.repository.TicketTypeRepository;
+import com.tikzy.ticket.entity.ShowTimeTicketInventory;
+import com.tikzy.ticket.repository.ShowTimeTicketInventoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,6 +56,8 @@ class EventDemoSeederTest {
     private ShowTimeRepository showTimeRepository;
     @Mock
     private TicketTypeRepository ticketTypeRepository;
+    @Mock
+    private ShowTimeTicketInventoryRepository inventoryRepository;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private Role organizerRole;
@@ -79,6 +83,7 @@ class EventDemoSeederTest {
                 eventRepository,
                 showTimeRepository,
                 ticketTypeRepository,
+                inventoryRepository,
                 passwordEncoder,
                 " " + EMAIL.toUpperCase() + " ",
                 PASSWORD,
@@ -100,6 +105,7 @@ class EventDemoSeederTest {
         });
         when(showTimeRepository.existsByEventIdAndStartTimeAndEndTime(any(), any(), any())).thenReturn(false);
         when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(any(), any())).thenReturn(false);
+        stubInventoryLookups();
         stubPublishedCategories();
 
         seeder.run(null);
@@ -133,6 +139,8 @@ class EventDemoSeederTest {
                 .count());
         assertTrue(ticketTypes.stream().anyMatch(ticketType -> "VIP".equals(ticketType.getName())));
         assertTrue(ticketTypes.stream().anyMatch(ticketType -> !ticketType.getIsActive()));
+
+        verify(inventoryRepository, times(5)).save(any(ShowTimeTicketInventory.class));
     }
 
     @Test
@@ -147,6 +155,7 @@ class EventDemoSeederTest {
         when(eventRepository.findByOrganizerIdAndTitle(any(), any())).thenReturn(Optional.of(existing));
         when(showTimeRepository.existsByEventIdAndStartTimeAndEndTime(any(), any(), any())).thenReturn(false);
         when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(any(), any())).thenReturn(false);
+        stubInventoryLookups();
 
         seeder.run(null);
 
@@ -154,6 +163,7 @@ class EventDemoSeederTest {
         verify(eventRepository, never()).save(any(Event.class));
         verify(showTimeRepository, times(13)).save(any(ShowTime.class));
         verify(ticketTypeRepository, times(14)).save(any(TicketType.class));
+        verify(inventoryRepository, times(5)).save(any(ShowTimeTicketInventory.class));
     }
 
     @Test
@@ -165,6 +175,7 @@ class EventDemoSeederTest {
                 eventRepository,
                 showTimeRepository,
                 ticketTypeRepository,
+                inventoryRepository,
                 passwordEncoder,
                 EMAIL,
                 " ",
@@ -172,6 +183,22 @@ class EventDemoSeederTest {
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
 
         assertThrows(IllegalStateException.class, () -> invalidSeeder.run(null));
+    }
+
+    private void stubInventoryLookups() {
+        ShowTime showTime = ShowTime.builder()
+                .isActive(true)
+                .build();
+        showTime.setId(UUID.randomUUID());
+        TicketType ticketType = TicketType.builder()
+                .name("VIP")
+                .maxPerOrder(4)
+                .isActive(true)
+                .build();
+        ticketType.setId(UUID.randomUUID());
+        when(showTimeRepository.findAllByEventIdOrderByStartTimeAsc(any())).thenReturn(List.of(showTime));
+        when(ticketTypeRepository.findAllByEventIdOrderByCreatedAtAsc(any())).thenReturn(List.of(ticketType));
+        when(inventoryRepository.existsByShowTimeIdAndTicketTypeId(any(), any())).thenReturn(false);
     }
 
     private void stubPublishedCategories() {
